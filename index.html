@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    viewport-fit=cover + user-scalable=no keeps the game filling the screen on
+    mobile and stops double-tap zoom from fighting with touch controls.
+  -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="description" content="Lumen Hollow - an original 2D platformer built with HTML5 Canvas." />
+  <meta name="theme-color" content="#0d0b1a" />
+  <title>Lumen Hollow</title>
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <!--
+    #stage is the letterbox container. Viewport.js sizes #game inside it so the
+    game's aspect ratio is always preserved, whatever the screen shape.
+  -->
+  <div id="stage">
+    <canvas id="game">
+      Your browser does not support the HTML5 canvas element, which this game requires.
+    </canvas>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

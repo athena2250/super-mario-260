@@ -1,0 +1,13 @@
+# Dependencies (the game itself ships with none; tooling may add some)
+node_modules/
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,18 @@
+{
+  "name": "lumen-hollow",
+  "version": "0.1.0",
+  "description": "Lumen Hollow - an original 2D platformer built with vanilla JavaScript and HTML5 Canvas.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "npx --yes serve --listen 8080 ."
+  },
+  "keywords": [
+    "game",
+    "platformer",
+    "canvas",
+    "vanilla-js"
+  ],
+  "license": "MIT"
+}
