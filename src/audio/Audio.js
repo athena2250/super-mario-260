@@ -1,0 +1,198 @@
+/**
+ * Sound effects, synthesised at runtime.
+ *
+ * Every sound is generated with oscillators and gain envelopes rather than
+ * loaded from a file. That keeps the repo asset-free and original, costs
+ * nothing to download, and lets each effect be tuned as numbers in source.
+ *
+ * Browsers refuse to start audio before a user gesture, so the context is
+ * created lazily on the first input and every call is a no-op until then. Sound
+ * is a garnish here: if it never unlocks, the game still plays correctly.
+ *
+ * @module audio/Audio
+ */
+
+/** Master output level. Deliberately modest - these are sharp, synthetic tones. */
+const MASTER_GAIN = 0.22;
+
+export class Audio {
+  constructor() {
+    /** @type {AudioContext | null} @private */
+    this._ctx = null;
+    /** @type {GainNode | null} @private */
+    this._master = null;
+    /** @type {boolean} */
+    this.muted = false;
+  }
+
+  /**
+   * Create or resume the audio context. Safe to call on every input event.
+   * Must be called from inside a user-gesture handler the first time.
+   */
+  unlock() {
+    if (this.muted) return;
+
+    if (!this._ctx) {
+      const Ctor = window.AudioContext ?? window.webkitAudioContext;
+      if (!Ctor) return;
+
+      this._ctx = new Ctor();
+      this._master = this._ctx.createGain();
+      this._master.gain.value = MASTER_GAIN;
+      this._master.connect(this._ctx.destination);
+    }
+
+    // Autoplay policies suspend the context; resuming is what actually unlocks.
+    if (this._ctx.state === 'suspended') this._ctx.resume();
+  }
+
+  /** Toggle sound on or off. @returns {boolean} New muted state. */
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this._master) this._master.gain.value = this.muted ? 0 : MASTER_GAIN;
+    return this.muted;
+  }
+
+  /** A short rising blip. Pip leaving the ground. */
+  jump() {
+    this._tone({ type: 'square', from: 320, to: 620, duration: 0.13, gain: 0.5 });
+  }
+
+  /**
+   * The stomp: a descending thud with a bright click on top, which is what
+   * makes a defeat feel like an impact rather than a beep.
+   */
+  stomp() {
+    this._tone({ type: 'square', from: 520, to: 90, duration: 0.16, gain: 0.7 });
+    this._tone({ type: 'triangle', from: 900, to: 300, duration: 0.08, gain: 0.4 });
+    this._noise({ duration: 0.09, gain: 0.25 });
+  }
+
+  /** Shard pickup: a bright two-step chime. */
+  shard() {
+    this._tone({ type: 'triangle', from: 880, to: 880, duration: 0.06, gain: 0.35 });
+    this._tone({ type: 'triangle', from: 1320, to: 1320, duration: 0.1, gain: 0.3, delay: 0.05 });
+  }
+
+  /** A rune accepted: rises, so progress sounds like progress. */
+  runeCorrect(step = 0) {
+    const base = 440 * Math.pow(1.26, step);
+    this._tone({ type: 'sine', from: base, to: base * 1.5, duration: 0.22, gain: 0.5 });
+  }
+
+  /** A rune refused: a flat, downward buzz. Unmistakably a "no". */
+  runeWrong() {
+    this._tone({ type: 'sawtooth', from: 220, to: 110, duration: 0.3, gain: 0.35 });
+  }
+
+  /** The bridge raising: one click per plank. */
+  plank() {
+    this._tone({ type: 'square', from: 1200, to: 800, duration: 0.05, gain: 0.18 });
+  }
+
+  /** The vault opening: a long, low swell. */
+  vault() {
+    this._tone({ type: 'sine', from: 90, to: 320, duration: 0.9, gain: 0.6 });
+    this._tone({ type: 'triangle', from: 180, to: 640, duration: 0.9, gain: 0.3 });
+  }
+
+  /** Taking a hit. */
+  hurt() {
+    this._tone({ type: 'sawtooth', from: 380, to: 90, duration: 0.35, gain: 0.5 });
+  }
+
+  /** Losing the last life. */
+  gameOver() {
+    const notes = [392, 330, 262, 196];
+    notes.forEach((frequency, index) => {
+      this._tone({
+        type: 'triangle',
+        from: frequency,
+        to: frequency,
+        duration: 0.22,
+        gain: 0.45,
+        delay: index * 0.16,
+      });
+    });
+  }
+
+  /** The chest opening: a rising arpeggio that resolves upward. */
+  treasure() {
+    const notes = [523, 659, 784, 1047, 1319];
+    notes.forEach((frequency, index) => {
+      this._tone({
+        type: 'triangle',
+        from: frequency,
+        to: frequency,
+        duration: 0.35,
+        gain: 0.42,
+        delay: index * 0.14,
+      });
+    });
+    this._tone({ type: 'sine', from: 262, to: 523, duration: 1.3, gain: 0.3, delay: 0.5 });
+  }
+
+  /**
+   * Play one oscillator with a percussive envelope.
+   *
+   * @param {object} options
+   * @param {OscillatorType} options.type
+   * @param {number} options.from - Start frequency in Hz.
+   * @param {number} options.to - End frequency in Hz.
+   * @param {number} options.duration - Seconds.
+   * @param {number} [options.gain=0.4] - Peak level, before the master gain.
+   * @param {number} [options.delay=0] - Seconds to wait before starting.
+   * @private
+   */
+  _tone({ type, from, to, duration, gain = 0.4, delay = 0 }) {
+    if (!this._ctx || this.muted) return;
+
+    const start = this._ctx.currentTime + delay;
+    const oscillator = this._ctx.createOscillator();
+    const envelope = this._ctx.createGain();
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(from, start);
+    if (to !== from) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, to), start + duration);
+
+    // A tiny attack avoids the click a hard start would produce; the
+    // exponential release is what makes these read as struck rather than held.
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.exponentialRampToValueAtTime(gain, start + 0.008);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+    oscillator.connect(envelope);
+    envelope.connect(this._master);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.02);
+  }
+
+  /**
+   * A burst of filtered white noise, for impact texture.
+   *
+   * @param {object} options
+   * @param {number} options.duration
+   * @param {number} [options.gain=0.2]
+   * @private
+   */
+  _noise({ duration, gain = 0.2 }) {
+    if (!this._ctx || this.muted) return;
+
+    const frames = Math.floor(this._ctx.sampleRate * duration);
+    const buffer = this._ctx.createBuffer(1, frames, this._ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < frames; i++) {
+      // Fading the noise as it is generated saves a second gain ramp.
+      data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+    }
+
+    const source = this._ctx.createBufferSource();
+    const envelope = this._ctx.createGain();
+    source.buffer = buffer;
+    envelope.gain.value = gain;
+
+    source.connect(envelope);
+    envelope.connect(this._master);
+    source.start();
+  }
+}
