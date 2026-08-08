@@ -71,7 +71,8 @@ src/
     Viewport.js        Responsive canvas sizing and coordinate conversion
     Loop.js            Fixed-timestep loop with interpolated rendering
     Camera.js          Follow camera: dead zone, look-ahead, damping, clamping
-    GameState.js       Lives, score, shards, timer and the game's phase
+    GameState.js       Lives, score, shards, beacons and the level's phase
+    LevelTimer.js      The five-minute countdown, and how urgent it is
     AppState.js        Which screen the game is on, and the fade between them
   input/
     Input.js           Action state (keyboard bindings, press/release API)
@@ -94,6 +95,7 @@ src/
     RuneSwitch.js      One of the vault's three runes
     RuneTablet.js      The clue: shows the required order and the progress
     MovingPlatform.js  Rides between two points; carries whoever stands on it
+    Checkpoint.js      A beacon: progress, and where death returns Pip to
     Chest.js           The objective, with its opening animation
   world/
     World.js           The living level: owns and simulates everything in it
@@ -115,8 +117,12 @@ src/
     screens/
       TitleScreen.js     Welcome screen: title, subtitle, Play, How To Play
       HowToPlayScreen.js Controls and objectives
+      TimeUpScreen.js    Drawn over the frozen level when the clock runs out
   levels/
-    level01.js         "The Shallow Hollow" as editable ASCII art
+    levels.js          The campaign list: order, names, difficulty
+    level01.js         "The Shallow Hollow" - gentle
+    level02.js         "The Weeping Gallery" - testing
+    level03.js         "The Shattered Deep" - punishing
 ```
 
 ## Levels
@@ -134,8 +140,25 @@ Levels are ASCII art, so they diff readably in git and can be edited by hand:
 ```
 
 `.` empty · `#` stone · `=` mossy stone · `-` one-way platform · `^` spikes ·
-`P` spawn. See `src/world/tiles.js` for the legend and `src/levels/level01.js`
-for the full map.
+`C` beacon · `P` spawn. See `src/world/tiles.js` for the full legend.
+
+There are three of them, and they escalate by asking for more at once rather
+than by making anything faster:
+
+| | Size | Creatures | Crossings | The vault's order |
+| --- | --- | --- | --- | --- |
+| **1. The Shallow Hollow** | 150 × 30 | 10 | one ferry | west to east, as met |
+| **2. The Weeping Gallery** | 176 × 30 | 12 | one long ferry | doubles back at the mesa |
+| **3. The Shattered Deep** | 200 × 30 | 16 | a lift and two ferries | doubles back across half the level |
+
+Levels 2 and 3 were composed and validated by a throwaway script rather than
+typed by hand. It checks what a person cannot check by eye: that every row is
+the same width, that no spike floats or object hangs in the air, that no spike
+run is too wide to jump back over, that every rune, tablet and shard is
+actually reachable using the measured jump metrics — and, crucially, that the
+*order the vault demands can be walked*, leg by leg, without stranding the
+player. The committed files are plain ASCII; regenerate them the same way if
+they change much.
 
 Geometry is set from the measured jump metrics, not by eye: surfaces sit exactly
 three tiles apart because Pip's feet reach 49 px, and the pits are graded — two
@@ -197,9 +220,43 @@ can make it.
 | **Wisp** | Flies a fixed path: horizontal patrol plus a slow weave | Ignores terrain entirely, so it is never unpredictable |
 
 Land on any of them to defeat it. Touch one any other way and it costs a life.
-Terrain deaths return Pip to the last solid ground he stood on; creature
-contact only knocks him back, because on a level this long, sending the player
-to the start for one mistimed jump would be punishing out of all proportion.
+Terrain deaths return Pip to the last beacon he lit; creature contact only
+knocks him back, because on a level this long, sending the player backwards for
+one mistimed jump would be punishing out of all proportion.
+
+## The clock
+
+Every level is played against five minutes. It is a ceiling rather than a race:
+five minutes is roughly three unhurried traversals of the longest level, so it
+only ever punishes wandering.
+
+It counts **simulation time, not wall-clock time**, and that is the accurate
+choice rather than the lazy one. The loop advances in fixed 1/60 s steps exactly
+sixty times per second of real time, whatever the display refreshes at, so
+subtracting `dt` burns the clock at the same rate on a 30 Hz phone and a 144 Hz
+monitor — a full level is exactly 18,000 steps. Sampling `performance.now()`
+instead would keep the clock running through a stall the player cannot play
+through, and would drift away from the simulation whenever the loop drops
+catch-up steps. The clock should measure the game the player actually got.
+
+It stops the moment the chest is touched, so a completion time reflects play and
+not how long the reward animation ran, and it stops dead whenever a screen is
+up. The HUD escalates at 60 s (amber), 30 s (a slow throb and a thin bar at the
+screen edges) and 10 s (a fast throb, a one-pixel jitter, and a tick each
+second). Urgency is carried by colour, rhythm and sound rather than by anything
+that moves the readout or tints the platform Pip is aiming at.
+
+## Beacons
+
+Every level has exactly three, standing on the through-route where they cannot
+be missed. Lighting one is worth points, lights a flame visible from off screen,
+and makes that beacon the place death returns Pip to — the run itself is never
+rolled back, so a death costs a life and the walk, never progress.
+
+All three must be lit before the chest will open, which is checked separately
+from the rune puzzle: the runes are the lock on the vault, the beacons are the
+toll on the treasure. Touching the chest early says so rather than doing
+nothing.
 
 ## Milestones
 

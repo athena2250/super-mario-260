@@ -61,9 +61,11 @@ with; it must not touch score, audio or the HUD directly.
 
 In `World.update()`: platforms move **first** (so riders are carried before they
 run their own movement), then the player, then platform landing, then creatures,
-then interactions against final positions. `Player._recordCheckpoint()` uses
-`contact.grounded` (tile contact) rather than `grounded`, so a checkpoint is
-never taken on a moving platform that will have travelled elsewhere.
+then interactions against final positions.
+
+`Player.respawnPoint` is set from outside — by `Game` when a `Checkpoint` is
+lit — never inferred from where Pip happens to be standing. A respawn point the
+player did not visibly earn is one they cannot predict.
 
 ### Simulation model
 

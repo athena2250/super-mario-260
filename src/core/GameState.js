@@ -9,6 +9,7 @@
  */
 
 import { RULES } from './Config.js';
+import { LevelTimer } from './LevelTimer.js';
 
 /**
  * Phases the game moves through.
@@ -27,6 +28,13 @@ export const PHASE = Object.freeze({
 
 export class GameState {
   constructor() {
+    /**
+     * The level's countdown. Built once and restarted per level rather than
+     * replaced, so anything holding a reference to it stays valid.
+     * @type {LevelTimer}
+     */
+    this.timer = new LevelTimer();
+
     this.reset();
   }
 
@@ -34,6 +42,9 @@ export class GameState {
   reset() {
     /** @type {string} */
     this.phase = PHASE.PLAYING;
+
+    /** Which level this run is of, as shown to the player. @type {number} */
+    this.levelNumber = 1;
 
     /** @type {number} */
     this.lives = RULES.startingLives;
@@ -50,11 +61,21 @@ export class GameState {
     /** Creatures defeated this run. @type {number} */
     this.defeated = 0;
 
-    /** Seconds of play elapsed. @type {number} */
-    this.time = 0;
+    /** Beacons lit this run. @type {number} */
+    this.checkpoints = 0;
+
+    /** Beacons the level contains, for the "1 / 3" readout. @type {number} */
+    this.checkpointTotal = 0;
 
     /** Seconds remaining on the game-over pause. @type {number} @private */
     this._restartTimer = 0;
+
+    this.timer.restart();
+  }
+
+  /** Seconds of play elapsed. @returns {number} */
+  get time() {
+    return this.timer.elapsed;
   }
 
   /** True while the world should simulate. @returns {boolean} */
@@ -63,14 +84,30 @@ export class GameState {
   }
 
   /**
-   * Advance the clock. The timer stops the moment the chest is touched, so the
-   * completion time reflects play rather than how long the animation ran.
+   * Advance the clock. It only runs during ordinary play, so it stops the
+   * moment the chest is touched - the completion time reflects the game played,
+   * not how long the animation ran - and it stops dead while a menu is up.
    *
    * @param {number} dt
+   * @returns {boolean} True on the single step the countdown runs out.
    */
   update(dt) {
-    if (this.phase === PHASE.PLAYING) this.time += dt;
     if (this.phase === PHASE.GAME_OVER) this._restartTimer -= dt;
+    if (this.phase !== PHASE.PLAYING) {
+      this.timer.stop();
+      return false;
+    }
+
+    // Re-arm after anything that stopped it: a pause, or the frame the level
+    // was loaded on.
+    if (!this.timer.running && !this.timer.expired) this.timer.resume();
+
+    return this.timer.update(dt);
+  }
+
+  /** True once the countdown has run out. @returns {boolean} */
+  get outOfTime() {
+    return this.timer.expired;
   }
 
   /** @param {number} amount */
@@ -88,6 +125,21 @@ export class GameState {
   recordStomp() {
     this.defeated += 1;
     this.addScore(RULES.stompScore);
+  }
+
+  /**
+   * Record a beacon being lit. The count is the world's to police - the world
+   * refuses a second lighting - so this only ever counts what actually
+   * happened.
+   */
+  lightCheckpoint() {
+    this.checkpoints += 1;
+    this.addScore(RULES.checkpointScore);
+  }
+
+  /** True once every beacon in the level is lit. @returns {boolean} */
+  get allCheckpointsLit() {
+    return this.checkpointTotal > 0 && this.checkpoints >= this.checkpointTotal;
   }
 
   /**
@@ -128,13 +180,13 @@ export class GameState {
   }
 
   /**
-   * Points for finishing quickly: a fixed pot that decays by one per second,
-   * never below zero. Simple enough that a player can feel it ticking.
+   * Points for finishing quickly: whatever is left on the clock, at a fixed
+   * rate per second. Simple enough that a player can feel it ticking away.
    *
    * @returns {number}
    */
   get timeBonus() {
-    return Math.max(0, Math.round(RULES.timeBonusStart - this.time));
+    return Math.max(0, Math.round(this.timer.remaining * RULES.timeBonusPerSecond));
   }
 
   /**
@@ -142,9 +194,14 @@ export class GameState {
    * @returns {string}
    */
   get formattedTime() {
-    const total = Math.floor(this.time);
-    const minutes = Math.floor(total / 60);
-    const seconds = total % 60;
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+    return this.timer.formattedElapsed;
+  }
+
+  /**
+   * Time left as `mm:ss` - the countdown the HUD shows.
+   * @returns {string}
+   */
+  get formattedRemaining() {
+    return this.timer.formatted;
   }
 }

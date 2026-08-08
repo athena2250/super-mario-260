@@ -52,12 +52,13 @@ export class Player extends Entity {
     this.spawnPoint = { x, y };
 
     /**
-     * The last patch of solid ground Pip stood on, and where a fall returns
-     * him to. On a level this long, sending the player back to the start for
-     * one mistimed jump would be punishing out of all proportion to the error.
+     * Where a death returns Pip to: the last beacon he lit, or the level's
+     * start until he lights one. Set from outside rather than inferred, because
+     * a respawn point the player did not visibly earn is one they cannot
+     * predict - and an unpredictable respawn reads as a bug.
      * @type {{x: number, y: number}}
      */
-    this.checkpoint = { x, y };
+    this.respawnPoint = { x, y };
 
     /** Last step's tile contact flags. @type {import('../physics/TileCollision.js').Contact} */
     this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
@@ -127,23 +128,18 @@ export class Player extends Entity {
     this.justLanded = !wasGrounded && this.grounded;
     if (this.justLanded) this.animation.land(fallSpeed);
 
-    this._recordCheckpoint();
     this.animation.update(dt, this);
   }
 
   /**
-   * Remember solid ground as a place worth returning to.
+   * Make a beacon the place death returns Pip to.
    *
-   * Only *tile* contact counts, never a moving platform - respawning onto a
-   * platform that has since travelled elsewhere would drop Pip into the chasm
-   * it was carrying him over. Ground that is hurting him does not count either.
-   *
-   * @private
+   * @param {number} x - Collision-box left edge.
+   * @param {number} y - Collision-box top edge.
    */
-  _recordCheckpoint() {
-    if (!this.contact.grounded || this.contact.hazard) return;
-    this.checkpoint.x = this.x;
-    this.checkpoint.y = this.y;
+  setRespawnPoint(x, y) {
+    this.respawnPoint.x = x;
+    this.respawnPoint.y = y;
   }
 
   /**
@@ -190,20 +186,19 @@ export class Player extends Entity {
   }
 
   /**
-   * Return to the last safe ground, with all motion and jump state cleared.
+   * Return to the last beacon lit - or to the level's start, if none has been.
    * Used after spikes or a fall out of the level.
    */
   respawn() {
-    this._returnTo(this.checkpoint);
+    this._returnTo(this.respawnPoint);
   }
 
   /**
-   * Return to the level's start and forget any checkpoint. Used when the whole
+   * Return to the level's start and forget any beacon. Used when the whole
    * level restarts.
    */
   restart() {
-    this.checkpoint.x = this.spawnPoint.x;
-    this.checkpoint.y = this.spawnPoint.y;
+    this.setRespawnPoint(this.spawnPoint.x, this.spawnPoint.y);
     this._returnTo(this.spawnPoint);
   }
 

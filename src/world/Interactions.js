@@ -94,7 +94,29 @@ export function resolveSwitches(world, player) {
 }
 
 /**
- * Open the chest, but only once the vault actually stands open.
+ * Light any beacon Pip is touching.
+ *
+ * The entity refuses a second lighting itself, so a player standing inside the
+ * box - which happens for many steps at a walking pace - can never count the
+ * same beacon twice.
+ *
+ * @param {import('./World.js').World} world
+ * @param {import('../entities/Player.js').Player} player
+ * @param {object} on
+ */
+export function resolveCheckpoints(world, player, on) {
+  for (const checkpoint of world.checkpoints) {
+    if (checkpoint.lit || !checkpoint.intersects(player)) continue;
+    if (!checkpoint.activate()) continue;
+
+    world.igniteCheckpoint(checkpoint);
+    on.checkpoint?.(checkpoint);
+  }
+}
+
+/**
+ * Open the chest, but only once the vault stands open *and* every beacon is
+ * lit. The runes are the lock; the beacons are the toll.
  *
  * @param {import('./World.js').World} world
  * @param {import('../entities/Player.js').Player} player
@@ -104,6 +126,13 @@ export function resolveChest(world, player, on) {
   const { chest } = world;
   if (!chest || !world.puzzle.open) return;
   if (chest.opening || !chest.intersects(player)) return;
+
+  if (!world.allCheckpointsLit) {
+    // Reported on a cooldown: without it this would fire every step for as
+    // long as the player stands against the chest.
+    if (chest.refuse()) on.chestRefused?.(world.checkpointsLit, world.checkpointTotal);
+    return;
+  }
 
   if (chest.open()) {
     world.particles.emit({

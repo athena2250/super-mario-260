@@ -14,7 +14,7 @@ import { Loop } from './core/Loop.js';
 import { Camera } from './core/Camera.js';
 import { GameState, PHASE } from './core/GameState.js';
 import { AppState, STATE } from './core/AppState.js';
-import { PALETTE, DEBUG, PLAYER, TILE_SIZE } from './core/Config.js';
+import { PALETTE, DEBUG, PLAYER, TILE_SIZE, TIMER } from './core/Config.js';
 import { Input } from './input/Input.js';
 import { Pointer } from './input/Pointer.js';
 import { TouchControls } from './input/TouchControls.js';
@@ -27,8 +27,9 @@ import { VictoryScreen } from './ui/VictoryScreen.js';
 import { MenuBackdrop } from './ui/MenuBackdrop.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { HowToPlayScreen } from './ui/screens/HowToPlayScreen.js';
+import { TimeUpScreen } from './ui/screens/TimeUpScreen.js';
 import { renderDebugOverlay } from './ui/DebugOverlay.js';
-import { level01 } from './levels/level01.js';
+import { LEVELS, LEVEL_COUNT, clampLevelIndex } from './levels/levels.js';
 
 /**
  * Convert a map's spawn tile into Pip's starting collision-box position:
@@ -70,13 +71,17 @@ export class Game {
     this.backdrop = new MenuBackdrop();
 
     /**
-     * Menu screens, keyed by the state that shows them. A state with no entry
-     * here is a gameplay state and runs the world instead.
-     * @type {Record<string, {enter?: () => void, update: Function, render: Function}>}
+     * Screens, keyed by the state that shows them. A state with no entry here
+     * is a gameplay state and runs the world instead.
+     *
+     * A screen may set `overWorld`, which means it is drawn on top of the level
+     * - frozen, still lit - rather than on top of the menu scenery.
+     * @type {Record<string, {overWorld?: boolean, enter?: () => void, update: Function, render: Function}>}
      */
     this.screens = {
       [STATE.MAIN_MENU]: new TitleScreen(),
       [STATE.HOW_TO_PLAY]: new HowToPlayScreen(),
+      [STATE.TIME_UP]: new TimeUpScreen(),
     };
 
     /** @type {GameState} */
@@ -91,19 +96,23 @@ export class Game {
     /** Ambient background particle field. @type {Spores} */
     this.spores = new Spores();
 
+    /** Index into {@link LEVELS} of the level currently loaded. @type {number} */
+    this.levelIndex = 0;
+
     /** @type {World} */
-    this.world = new World(level01, this._worldHandlers());
-    this.state.shardTotal = this.world.shardTotal;
-
+    this.world = null;
     /** @type {Player} */
-    this.player = new Player(...spawnPositionFor(this.world.map));
-
+    this.player = null;
     /** @type {Camera} */
-    this.camera = new Camera(this.world.map);
-    this.camera.snapTo(this.player);
+    this.camera = null;
 
     /** Time bonus awarded on completion, held for the results screen. @private */
     this._timeBonus = 0;
+
+    /** Last whole second announced by {@link _soundTheClock}. @type {number|null} @private */
+    this._lastSecond = null;
+
+    this.loadLevel(0);
 
     /** @type {Loop} */
     this.loop = new Loop({
@@ -121,6 +130,36 @@ export class Game {
 
     this.screens[STATE.MAIN_MENU].enter();
     this._attachAudioUnlock();
+  }
+
+  /** The level currently loaded. @returns {import('./levels/levels.js').LevelEntry} */
+  get level() {
+    return LEVELS[this.levelIndex];
+  }
+
+  /**
+   * Build a level from scratch: its world, its Pip, its camera and a fresh run
+   * state. Everything a level owns is replaced rather than reused, so nothing
+   * can survive from the level before it.
+   *
+   * @param {number} index - Index into {@link LEVELS}; clamped.
+   */
+  loadLevel(index) {
+    this.levelIndex = clampLevelIndex(index);
+
+    this.world = new World(this.level.definition, this._worldHandlers());
+    this.player = new Player(...spawnPositionFor(this.world.map));
+    this.camera = new Camera(this.world.map);
+    this.camera.snapTo(this.player);
+
+    this.state.reset();
+    this.state.levelNumber = this.level.number;
+    this.state.shardTotal = this.world.shardTotal;
+    this.state.checkpointTotal = this.world.checkpointTotal;
+    this.hud.reset();
+    this.victory.reset();
+    this._timeBonus = 0;
+    this._lastSecond = null;
   }
 
   /** Start the simulation. */
@@ -157,7 +196,11 @@ export class Game {
 
     const screen = this.screens[this.app.state];
     if (screen) {
-      this.backdrop.update(dt);
+      // A screen laid over the level leaves the level exactly as it was: the
+      // world is not stepped, so nothing moves and the clock does not run.
+      if (!screen.overWorld) this.backdrop.update(dt);
+      this.hud.update(dt);
+
       const result = screen.update(dt, this.input, this.pointer);
       if (!transitioning && result) this._handleScreenAction(result);
     } else {
@@ -181,9 +224,15 @@ export class Game {
    * @private
    */
   _updateLevel(dt) {
-    this.state.update(dt);
+    const ranOut = this.state.update(dt);
     this.hud.update(dt);
     this.victory.update(dt);
+
+    if (ranOut) {
+      this._onTimeUp();
+      return;
+    }
+    this._soundTheClock();
 
     if (this.state.running) {
       this.world.update(dt, this.input, this.player);
@@ -196,8 +245,65 @@ export class Game {
       // The world is frozen behind the results screen, but the camera keeps
       // easing so the final frame settles rather than stopping dead.
       this.camera.update(dt, this.player);
-      if (this.victory.complete && this.input.justPressed('jump')) this._restartLevel();
+      if (this.victory.complete && this.input.justPressed('jump')) this._advanceLevel();
     }
+  }
+
+  /**
+   * The countdown has run out. The level is left exactly as it stands - the
+   * screen is drawn over it - so the player can see where they ran out.
+   * @private
+   */
+  _onTimeUp() {
+    this.audio.timeUp();
+    this._goto(STATE.TIME_UP);
+  }
+
+  /**
+   * Mark the passing seconds once the clock is low: a tick each second through
+   * the last ten, and a single chime as each warning threshold is crossed.
+   *
+   * Sound carries urgency without costing any of the screen the player is
+   * trying to read, which is why the visual warnings can stay as restrained as
+   * they are.
+   *
+   * @private
+   */
+  _soundTheClock() {
+    const { timer } = this.state;
+    const seconds = timer.wholeSecondsLeft;
+    if (seconds === this._lastSecond) return;
+
+    const previous = this._lastSecond;
+    this._lastSecond = seconds;
+
+    // Only ever going down, and only while actually playing.
+    if (previous === null || seconds > previous || !timer.running) return;
+
+    if (seconds === TIMER.warnAt || seconds === TIMER.alarmAt) {
+      this.audio.timeWarning();
+    } else if (seconds > 0 && seconds <= TIMER.criticalAt) {
+      this.audio.tick();
+    }
+  }
+
+  /**
+   * Move on from a finished level.
+   *
+   * Milestone 5 replaces this with a proper results screen; for now it is the
+   * shortest honest thing: on to the next level, or back to the title after the
+   * last one.
+   *
+   * @private
+   */
+  _advanceLevel() {
+    const next = this.levelIndex + 1;
+
+    if (next >= LEVEL_COUNT) {
+      this._goto(STATE.MAIN_MENU, () => this.loadLevel(0));
+      return;
+    }
+    this._goto(STATE.PLAYING, () => this.loadLevel(next));
   }
 
   /**
@@ -222,11 +328,19 @@ export class Game {
     switch (id) {
       case 'play':
         this.audio.menuSelect();
-        this._goto(STATE.PLAYING, () => this._restartLevel());
+        this._goto(STATE.PLAYING, () => this.loadLevel(0));
         break;
       case 'howToPlay':
         this.audio.menuSelect();
         this._goto(STATE.HOW_TO_PLAY);
+        break;
+      case 'retry':
+        this.audio.menuSelect();
+        this._goto(STATE.PLAYING, () => this.loadLevel(this.levelIndex));
+        break;
+      case 'mainMenu':
+        this.audio.menuBack();
+        this._goto(STATE.MAIN_MENU, () => this.loadLevel(0));
         break;
       case 'back':
         this.audio.menuBack();
@@ -246,6 +360,7 @@ export class Game {
    */
   _goto(state, work) {
     this.app.go(state, {
+      reenter: true,
       onSwap: () => {
         work?.();
         this.screens[state]?.enter?.();
@@ -269,21 +384,15 @@ export class Game {
     ctx.fillRect(0, 0, width, height);
 
     const screen = this.screens[this.app.state];
-    if (screen) {
+
+    if (screen && !screen.overWorld) {
       this.backdrop.render(ctx);
       this.spores.render(ctx, alpha, this.backdrop.drift);
       screen.render(ctx);
     } else {
-      this.spores.render(ctx, alpha, this.camera.x);
-
-      ctx.save();
-      this.camera.applyTo(ctx);
-      this.world.render(ctx, alpha, this.camera.view);
-      this.player.render(ctx, alpha);
-      ctx.restore();
-
-      this.hud.render(ctx, this.state);
-      this.victory.render(ctx, this.state, this._timeBonus);
+      this._renderLevel(ctx, alpha);
+      // A screen that sits over the level draws last, on top of the HUD.
+      screen?.render(ctx);
     }
 
     this.touchControls.render(ctx);
@@ -291,6 +400,27 @@ export class Game {
 
     // Last of all, so the curtain covers the interface as well as the world.
     this.app.renderCurtain(ctx, width, height);
+  }
+
+  /**
+   * The level itself: spores, then the world inside the camera transform, then
+   * the interface in screen space.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} alpha
+   * @private
+   */
+  _renderLevel(ctx, alpha) {
+    this.spores.render(ctx, alpha, this.camera.x);
+
+    ctx.save();
+    this.camera.applyTo(ctx);
+    this.world.render(ctx, alpha, this.camera.view);
+    this.player.render(ctx, alpha);
+    ctx.restore();
+
+    this.hud.render(ctx, this.state);
+    this.victory.render(ctx, this.state, this._timeBonus);
   }
 
   /**
@@ -322,6 +452,11 @@ export class Game {
         this.audio.runeWrong();
         this.hud.showMessage('WRONG ORDER', PALETTE.thistle);
       },
+      checkpoint: (checkpoint) => this._lightCheckpoint(checkpoint),
+      chestRefused: (lit, total) => {
+        this.audio.refused();
+        this.hud.showMessage(`BEACONS ${lit}/${total}`, PALETTE.thistle, 2);
+      },
       solved: () => this.hud.showMessage('THE VAULT STIRS', PALETTE.runeAzure, 2.2),
       plank: () => this.audio.plank(),
       vault: () => this.audio.vault(),
@@ -330,6 +465,32 @@ export class Game {
         this.audio.treasure();
       },
     };
+  }
+
+  /**
+   * A beacon has caught: count it, announce it, and make it the place death
+   * returns Pip to from now on.
+   *
+   * The respawn point is the *most recently* lit beacon rather than the
+   * highest-numbered one, because that is where the player last was - which is
+   * what "send me back to where I was" means to them.
+   *
+   * @param {import('./entities/Checkpoint.js').Checkpoint} checkpoint
+   * @private
+   */
+  _lightCheckpoint(checkpoint) {
+    this.state.lightCheckpoint();
+    this.audio.checkpoint();
+
+    const { x, y } = checkpoint.respawnPosition(this.player.width, this.player.height);
+    this.player.setRespawnPoint(x, y);
+
+    const total = this.world.checkpointTotal;
+    this.hud.showMessage(
+      `CHECKPOINT ${checkpoint.number} OF ${total}`,
+      PALETTE.lanternCore,
+      2,
+    );
   }
 
   /**
@@ -391,6 +552,7 @@ export class Game {
     this.world.reset();
     this.state.reset();
     this.state.shardTotal = this.world.shardTotal;
+    this.state.checkpointTotal = this.world.checkpointTotal;
     this.hud.reset();
     this.victory.reset();
     this._timeBonus = 0;

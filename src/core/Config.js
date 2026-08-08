@@ -204,6 +204,24 @@ export const ENEMY = Object.freeze({
   deathTime: 0.4,
 });
 
+/**
+ * The countdown every level is played against.
+ *
+ * Five minutes is roughly three unhurried traversals of the longest level, so
+ * it is not a race - it is a ceiling that only punishes wandering. The warning
+ * thresholds are spaced so each one lands as a distinct event rather than as a
+ * gradual creep the player stops noticing.
+ */
+export const TIMER = Object.freeze({
+  /** Seconds on the clock at the start of every level. */
+  levelSeconds: 300,
+
+  /** Remaining-time thresholds, in seconds, at which the HUD escalates. */
+  warnAt: 60,
+  alarmAt: 30,
+  criticalAt: 10,
+});
+
 /** Player survival rules. */
 export const RULES = Object.freeze({
   startingLives: 3,
@@ -212,8 +230,10 @@ export const RULES = Object.freeze({
   /** Points awarded per pickup and per defeated enemy. */
   shardScore: 25,
   stompScore: 10,
-  /** Bonus for finishing quickly: this many points, decaying one per second. */
-  timeBonusStart: 600,
+  /** Lighting a beacon is worth more than either: it is real progress. */
+  checkpointScore: 100,
+  /** Bonus for finishing quickly: this much per second still on the clock. */
+  timeBonusPerSecond: 2,
 });
 
 /** Moving platform behaviour. */

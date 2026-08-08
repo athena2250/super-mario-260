@@ -42,6 +42,9 @@ export class Chest extends Entity {
 
     /** Seconds since opening began. @type {number} @private */
     this._openTime = 0;
+
+    /** Seconds until the "not yet" nudge may fire again. @type {number} @private */
+    this._refuseCooldown = 0;
   }
 
   /**
@@ -57,6 +60,7 @@ export class Chest extends Entity {
    */
   update(dt) {
     this._time += dt;
+    this._refuseCooldown = Math.max(0, this._refuseCooldown - dt);
     if (!this.opening || this.opened) return;
 
     this._openTime += dt;
@@ -75,11 +79,25 @@ export class Chest extends Entity {
     return true;
   }
 
+  /**
+   * Touched while something still bars it. Rate-limited, because the player
+   * pressing against a chest that will not open touches it every single step
+   * and the answer only needs saying once.
+   *
+   * @returns {boolean} True if the caller should announce the refusal.
+   */
+  refuse() {
+    if (this._refuseCooldown > 0) return false;
+    this._refuseCooldown = 2;
+    return true;
+  }
+
   /** Reseal. Used on level restart. */
   reset() {
     this.opening = false;
     this.opened = false;
     this._openTime = 0;
+    this._refuseCooldown = 0;
   }
 
   /**

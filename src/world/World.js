@@ -20,6 +20,7 @@ import {
   resolveShards,
   resolveEnemies,
   resolveSwitches,
+  resolveCheckpoints,
   resolveChest,
 } from './Interactions.js';
 import { PALETTE, TILE_SIZE, DEBUG } from '../core/Config.js';
@@ -48,6 +49,8 @@ export class World {
     this.tablets = built.tablets;
     /** @type {import('../entities/MovingPlatform.js').MovingPlatform[]} */
     this.platforms = built.platforms;
+    /** @type {import('../entities/Checkpoint.js').Checkpoint[]} */
+    this.checkpoints = built.checkpoints;
     /** @type {import('../entities/Chest.js').Chest | null} */
     this.chest = built.chest;
 
@@ -72,6 +75,28 @@ export class World {
   /** Total shards the level contains. @returns {number} */
   get shardTotal() {
     return this.shards.length;
+  }
+
+  /** Beacons the level contains. @returns {number} */
+  get checkpointTotal() {
+    return this.checkpoints.length;
+  }
+
+  /** Beacons currently lit. @returns {number} */
+  get checkpointsLit() {
+    let lit = 0;
+    for (const checkpoint of this.checkpoints) {
+      if (checkpoint.lit) lit += 1;
+    }
+    return lit;
+  }
+
+  /**
+   * True once every beacon is lit, which is what the chest waits for.
+   * @returns {boolean}
+   */
+  get allCheckpointsLit() {
+    return this.checkpointsLit === this.checkpointTotal;
   }
 
   /**
@@ -101,6 +126,7 @@ export class World {
     for (const shard of this.shards) shard.update(dt);
     for (const runeSwitch of this.switches) runeSwitch.update(dt);
     for (const tablet of this.tablets) tablet.update(dt);
+    for (const checkpoint of this.checkpoints) checkpoint.update(dt);
     this.chest?.update(dt);
 
     this.puzzle.update(dt);
@@ -120,6 +146,7 @@ export class World {
 
     for (const enemy of this.enemies) enemy.reset();
     for (const platform of this.platforms) platform.reset();
+    for (const checkpoint of this.checkpoints) checkpoint.reset();
     for (const shard of this.shards) {
       shard.collected = false;
       shard.alive = true;
@@ -140,6 +167,7 @@ export class World {
 
     for (const tablet of this.tablets) tablet.render(ctx);
     for (const runeSwitch of this.switches) runeSwitch.render(ctx);
+    for (const checkpoint of this.checkpoints) checkpoint.render(ctx);
     this.chest?.render(ctx);
 
     for (const shard of this.shards) {
@@ -197,7 +225,26 @@ export class World {
     resolveShards(this, player, this._on);
     resolveEnemies(this, player, this._on);
     resolveSwitches(this, player);
+    resolveCheckpoints(this, player, this._on);
     resolveChest(this, player, this._on);
+  }
+
+  /**
+   * Fire the burst of light a beacon throws as it catches.
+   *
+   * @param {import('../entities/Checkpoint.js').Checkpoint} checkpoint
+   */
+  igniteCheckpoint(checkpoint) {
+    this.particles.emit({
+      x: checkpoint.centerX,
+      y: checkpoint.top + 4,
+      count: 26,
+      color: PALETTE.lantern,
+      speed: 90,
+      gravity: -40,
+      life: 0.9,
+      upwardBias: 50,
+    });
   }
 
   /**

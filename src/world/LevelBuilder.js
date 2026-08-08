@@ -17,6 +17,7 @@ import { Shard } from '../entities/Shard.js';
 import { RuneSwitch } from '../entities/RuneSwitch.js';
 import { RuneTablet } from '../entities/RuneTablet.js';
 import { MovingPlatform } from '../entities/MovingPlatform.js';
+import { Checkpoint } from '../entities/Checkpoint.js';
 import { Chest } from '../entities/Chest.js';
 
 /**
@@ -46,6 +47,7 @@ function placeCreature(Species, col, row, size) {
  *   switches: RuneSwitch[],
  *   tablets: RuneTablet[],
  *   platforms: MovingPlatform[],
+ *   checkpoints: Checkpoint[],
  *   chest: Chest | null,
  *   switchOrder: number[],
  * }}
@@ -59,9 +61,13 @@ export function buildLevel(definition, map) {
     switches: [],
     tablets: [],
     platforms: [],
+    checkpoints: [],
     chest: null,
     switchOrder,
   };
+
+  /** Columns of the checkpoint markers, so they can be numbered by position. */
+  const checkpointCells = [];
 
   for (const placement of map.objects) {
     const { type, col, row } = placement;
@@ -86,7 +92,11 @@ export function buildLevel(definition, map) {
         built.tablets.push(new RuneTablet(col, row, switchOrder));
         break;
       case 'platform':
-        built.platforms.push(new MovingPlatform(col, row));
+        built.platforms.push(new MovingPlatform(col, row, placement.options));
+        break;
+      case 'checkpoint':
+        // Numbered after the sweep, once every one of them is known.
+        checkpointCells.push({ col, row });
         break;
       case 'chest':
         built.chest = new Chest(col, row);
@@ -99,6 +109,13 @@ export function buildLevel(definition, map) {
   // Switches are addressed by index throughout the puzzle, so keep the array
   // ordered by identity rather than by where they happened to appear.
   built.switches.sort((a, b) => a.index - b.index);
+
+  // Beacons are numbered west to east, which is the order the route meets them
+  // in - so "checkpoint 2" means the same thing to the player as it does here,
+  // whatever order the markers happened to be parsed in.
+  built.checkpoints = checkpointCells
+    .sort((a, b) => a.col - b.col)
+    .map((cell, index) => new Checkpoint(cell.col, cell.row, index + 1));
 
   return built;
 }

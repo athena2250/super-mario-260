@@ -89,9 +89,13 @@ export class AppState {
    *   pause, which must not black out the level behind it.
    * @param {() => void} [options.onSwap] - Run at the darkest point of the
    *   fade, or immediately when instant. Load levels here.
+   * @param {boolean} [options.reenter=false] - Allow a transition to the state
+   *   already current. Restarting a level and moving to the next one are both
+   *   `PLAYING` to `PLAYING`, and both want the fade.
    */
-  go(state, { instant = false, onSwap = null } = {}) {
-    if (this.busy || state === this.state) return;
+  go(state, { instant = false, onSwap = null, reenter = false } = {}) {
+    if (this.busy) return;
+    if (state === this.state && !reenter) return;
 
     if (instant) {
       onSwap?.();

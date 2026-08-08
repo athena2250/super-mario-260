@@ -78,11 +78,31 @@ export const CHAR_TO_OBJECT = Object.freeze({
   w: 'wisp',
   o: 'shard',
   m: 'platform',
+  M: 'platform',
+  v: 'platform',
   1: 'switch',
   2: 'switch',
   3: 'switch',
+  C: 'checkpoint',
   T: 'chest',
   t: 'tablet',
+});
+
+/**
+ * How each platform marker is rigged. A level says what a crossing *is* - a
+ * short ferry, a long one, a lift - rather than repeating constructor options,
+ * so the marker in the ASCII carries the whole meaning.
+ *
+ * Vertical platforms travel *downward* from their marker, so the character is
+ * placed at the top of the run and the level reads as where the lift rests when
+ * it is up.
+ *
+ * @type {Record<string, {travelTiles: number, vertical?: boolean}>}
+ */
+export const PLATFORM_VARIANT = Object.freeze({
+  m: { travelTiles: 5 },
+  M: { travelTiles: 8 },
+  v: { travelTiles: 4, vertical: true },
 });
 
 /**

@@ -95,6 +95,30 @@ export class Audio {
     this._tone({ type: 'triangle', from: 1320, to: 1320, duration: 0.1, gain: 0.3, delay: 0.05 });
   }
 
+  /**
+   * A beacon catching: a struck chord that opens upward, longer and warmer than
+   * anything else in the game. It should feel like relief.
+   */
+  checkpoint() {
+    const notes = [392, 523, 659];
+    notes.forEach((frequency, index) => {
+      this._tone({
+        type: 'triangle',
+        from: frequency,
+        to: frequency,
+        duration: 0.5,
+        gain: 0.4,
+        delay: index * 0.07,
+      });
+    });
+    this._tone({ type: 'sine', from: 196, to: 392, duration: 0.8, gain: 0.3 });
+  }
+
+  /** Pushing at something that is not ready yet. */
+  refused() {
+    this._tone({ type: 'square', from: 200, to: 160, duration: 0.18, gain: 0.28 });
+  }
+
   /** A rune accepted: rises, so progress sounds like progress. */
   runeCorrect(step = 0) {
     const base = 440 * Math.pow(1.26, step);
@@ -115,6 +139,23 @@ export class Audio {
   vault() {
     this._tone({ type: 'sine', from: 90, to: 320, duration: 0.9, gain: 0.6 });
     this._tone({ type: 'triangle', from: 180, to: 640, duration: 0.9, gain: 0.3 });
+  }
+
+  /** One second gone, in the last ten. Dry and short - a clock, not a melody. */
+  tick() {
+    this._tone({ type: 'square', from: 1400, to: 1400, duration: 0.035, gain: 0.16 });
+  }
+
+  /** Crossing a warning threshold: two falling notes, unmistakably a countdown. */
+  timeWarning() {
+    this._tone({ type: 'triangle', from: 660, to: 660, duration: 0.14, gain: 0.32 });
+    this._tone({ type: 'triangle', from: 494, to: 494, duration: 0.22, gain: 0.32, delay: 0.15 });
+  }
+
+  /** The clock running out: a long descending slide with no resolution. */
+  timeUp() {
+    this._tone({ type: 'sawtooth', from: 440, to: 60, duration: 1.2, gain: 0.45 });
+    this._tone({ type: 'triangle', from: 220, to: 55, duration: 1.4, gain: 0.3, delay: 0.1 });
   }
 
   /** Taking a hit. */

@@ -17,9 +17,16 @@
  *     puzzle can raise.
  *
  * The vault demands three runes struck in the order shown on the tablets:
- * amber, azure, verdant. None of the three sits on the through-route, so no
- * rune can be triggered by accident, and the azure one is inside the hidden
- * room - the treasure cannot be reached without finding the secret.
+ * amber, verdant, azure. That is the order they are met in, which is what makes
+ * this the gentle level - the sequence never sends the player backwards, so the
+ * only difficulty is the reaching. None of the three sits on the through-route,
+ * so no rune can be triggered by accident, and the azure one is inside the
+ * hidden room - the treasure cannot be reached without finding the secret.
+ *
+ * Three beacons stand on the through-route - at the cavern mouth, on the mesa
+ * approach and at the lip of the vault chasm. They cannot be missed, which is
+ * the point on the gentle level: this is where the player learns that a beacon
+ * is both progress and the place death sends them back to.
  *
  * Geometry comes from the measured jump metrics, never from eye: Pip's feet
  * reach 49 px, so every climbable surface is exactly three tiles up, and every
@@ -31,8 +38,8 @@
  *   `:` bridge-to-be           `V` vault door
  *   `g` snub     `h` thistle  `w` wisp        `o` lumen shard
  *   `1` `2` `3` rune switches (amber, verdant, azure)
- *   `t` rune tablet            `m` moving platform
- *   `T` treasure chest         `P` spawn
+ *   `C` beacon (checkpoint)    `t` rune tablet
+ *   `m` moving platform        `T` treasure chest       `P` spawn
  *
  * @module levels/level01
  */
@@ -41,11 +48,12 @@ export const level01 = {
   name: 'The Shallow Hollow',
 
   /**
-   * The order the vault demands, as switch indices: amber (0), then azure (2),
-   * then verdant (1). Deliberately not left-to-right, so the sequence has to be
-   * read from a tablet and planned around rather than stumbled into.
+   * The order the vault demands, as switch indices: amber (0), verdant (1),
+   * azure (2) - west to east, the order the route meets them in. Levels 2 and 3
+   * scramble it; this one teaches what a tablet is for without also asking the
+   * player to plan a route around it.
    */
-  switchOrder: [0, 2, 1],
+  switchOrder: [0, 1, 2],
 
   rows: [
     '......................................................................................................................................................',
@@ -72,7 +80,7 @@ export const level01 = {
     '.......................................1......og...#####.#####.......w........2........................................................VV.............',
     '................................o.....----...=====.#####.#####......o.o......====..................=======.....................w.......VV.............',
     '.....................oo......................#####.#####.#####...............####..................#.oo.o%oo...........................VV...o....o....',
-    '...P..t.ooo...g............g........^^.......#####.#####.#####.===m........o................g......#.o.3.%o...h.^^..t.g................VV..o..T...o...',
+    '...P..t.ooo.C.g............g........^^.......#####.#####.#####.===m........o......C.........g......#.o.3.%o...h.^^..t.g.C..............VV..o..T...o...',
     '=====================..========...===========#####=#####=#####====.......=================================================::::::::::==================',
     '#####################..########...################################.......#################################################..........##################',
     '#####################..########...################################.......#################################################..........##################',
