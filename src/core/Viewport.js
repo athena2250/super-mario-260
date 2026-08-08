@@ -39,6 +39,14 @@ export class Viewport {
     /** Current CSS-pixels-per-logical-pixel scale factor. @type {number} */
     this.scale = 1;
 
+    /**
+     * The scale the canvas element is actually sized to, or null before the
+     * first layout. Kept so a resize that changes nothing can be skipped.
+     * @type {number|null}
+     * @private
+     */
+    this._appliedScale = null;
+
     // Bound so it can be added and removed as the same reference.
     this._onResize = this.resize.bind(this);
 
@@ -75,6 +83,12 @@ export class Viewport {
 
     const rawScale = Math.min(availWidth / GAME_WIDTH, availHeight / GAME_HEIGHT);
     this.scale = rawScale >= 1 ? Math.floor(rawScale) : rawScale;
+
+    // Mobile browsers fire this repeatedly while their chrome slides in and
+    // out, and most of those events do not change the scale at all. Writing the
+    // style anyway would invalidate layout for nothing, mid-jump.
+    if (this.scale === this._appliedScale) return;
+    this._appliedScale = this.scale;
 
     this.canvas.style.width = `${GAME_WIDTH * this.scale}px`;
     this.canvas.style.height = `${GAME_HEIGHT * this.scale}px`;

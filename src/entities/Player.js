@@ -65,9 +65,6 @@ export class Player extends Entity {
      */
     this.startPoint = { x, y };
 
-    /** Last step's tile contact flags. @type {import('../physics/TileCollision.js').Contact} */
-    this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
-
     /** Presentation state - never read back by the simulation. */
     this.animation = new PlayerAnimation();
 
@@ -126,7 +123,7 @@ export class Player extends Entity {
     const dropThrough = input.isDown('down');
 
     const wasGrounded = this.grounded;
-    this.contact = moveAndCollide(this, dt, map, { dropThrough });
+    moveAndCollide(this, dt, map, dropThrough);
     clampToBounds(this, map);
 
     this.grounded = this.contact.grounded;
@@ -228,7 +225,10 @@ export class Player extends Entity {
     // The contact flags describe the position Pip has just left. Left standing,
     // the spikes he died on would be read again from here and cost a second
     // life on the very next step.
-    this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
+    this.contact.grounded = false;
+    this.contact.ceiling = false;
+    this.contact.wall = false;
+    this.contact.hazard = false;
 
     // Without this the renderer would draw Pip streaking across the level from
     // wherever he died back to the spawn point.

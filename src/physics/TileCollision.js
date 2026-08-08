@@ -35,18 +35,34 @@ const PLATFORM_TOLERANCE = 1;
  */
 
 /**
+ * Scratch grid ranges, one per query, so no call can overwrite another's while
+ * it is still being read. Reused rather than reallocated: this file runs three
+ * range queries per body per step, which was thousands of short-lived objects a
+ * second for numbers that are read immediately and then thrown away.
+ */
+const horizontalRange = { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 };
+const verticalRange = { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 };
+const hazardRange = { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 };
+
+/**
  * Integrate a body's velocity against the tile map and resolve overlaps.
+ *
+ * The result is the body's own {@link Contact} object, written in place. Read
+ * it before moving the same body again.
  *
  * @param {import('../entities/Entity.js').Entity} body
  * @param {number} dt - Timestep in seconds.
  * @param {import('../world/TileMap.js').TileMap} map
- * @param {object} [options]
- * @param {boolean} [options.dropThrough=false] - Ignore one-way platforms this
- *   step, letting the body fall through them.
+ * @param {boolean} [dropThrough=false] - Ignore one-way platforms this step,
+ *   letting the body fall through them.
  * @returns {Contact}
  */
-export function moveAndCollide(body, dt, map, options = {}) {
-  const contact = { grounded: false, ceiling: false, wall: false, hazard: false };
+export function moveAndCollide(body, dt, map, dropThrough = false) {
+  const contact = body.contact;
+  contact.grounded = false;
+  contact.ceiling = false;
+  contact.wall = false;
+  contact.hazard = false;
 
   // Captured before any movement: one-way platforms need to know whether the
   // body was already below them.
@@ -56,7 +72,7 @@ export function moveAndCollide(body, dt, map, options = {}) {
   resolveHorizontal(body, map, contact);
 
   body.y += body.vy * dt;
-  resolveVertical(body, map, contact, previousBottom, options.dropThrough === true);
+  resolveVertical(body, map, contact, previousBottom, dropThrough === true);
 
   contact.hazard = overlapsHazard(body, map);
   return contact;
@@ -87,7 +103,7 @@ function resolveHorizontal(body, map, contact) {
   const direction = Math.sign(body.vx);
   if (direction === 0) return;
 
-  const range = map.rangeFor(body);
+  const range = map.rangeInto(body, horizontalRange);
 
   // Scan from the trailing edge toward the leading edge, so the tile that
   // stops the body is the first one it would actually have reached.
@@ -118,7 +134,7 @@ function resolveVertical(body, map, contact, previousBottom, dropThrough) {
   const direction = Math.sign(body.vy);
   if (direction === 0) return;
 
-  const range = map.rangeFor(body);
+  const range = map.rangeInto(body, verticalRange);
   const first = direction > 0 ? range.rowStart : range.rowEnd;
   const last = direction > 0 ? range.rowEnd : range.rowStart;
 
@@ -165,7 +181,7 @@ function landsOnPlatform(row, previousBottom) {
  * @returns {boolean} True if the body overlaps a hazard's inset danger zone.
  */
 function overlapsHazard(body, map) {
-  const range = map.rangeFor(body);
+  const range = map.rangeInto(body, hazardRange);
 
   for (let row = range.rowStart; row <= range.rowEnd; row++) {
     for (let col = range.colStart; col <= range.colEnd; col++) {

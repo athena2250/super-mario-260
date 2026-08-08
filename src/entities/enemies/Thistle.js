@@ -31,6 +31,13 @@ const WIND_UP = 0.32;
 const LEAP_REACH =
   ENEMY.thistle.speed * ((2 * ENEMY.thistle.jumpSpeed) / PHYSICS.gravity) * 0.9;
 
+/**
+ * Fractions of the leap at which the landing probe samples. Sampling across the
+ * arc rather than only at its end is what lets a narrow ledge partway along
+ * count as somewhere to land.
+ */
+const PROBE_FRACTIONS = Object.freeze([0.5, 0.8, 1]);
+
 export class Thistle extends Enemy {
   /**
    * @param {number} x
@@ -94,10 +101,9 @@ export class Thistle extends Enemy {
   _canLandAhead(map) {
     const row = map.rowAt(this.bottom + 1);
 
-    // Sample across the arc, not only its far end, so a narrow ledge partway
-    // along still counts. Every sample is inside LEAP_REACH, so anything found
-    // here is somewhere the creature can genuinely land.
-    for (const fraction of [0.5, 0.8, 1]) {
+    // Every sample is inside LEAP_REACH, so anything found here is somewhere
+    // the creature can genuinely land.
+    for (const fraction of PROBE_FRACTIONS) {
       const probeX = this.centerX + this.facing * LEAP_REACH * fraction;
       const col = map.colAt(probeX);
       if (map.isSolidAt(col, row) || map.isPlatformAt(col, row)) return true;

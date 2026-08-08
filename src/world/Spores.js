@@ -119,20 +119,39 @@ export class Spores {
    * @private
    */
   _createMote(scatter) {
+    return this._randomise(
+      { x: 0, y: 0, prevX: 0, prevY: 0, riseSpeed: 0, swayAmount: 0, swaySpeed: 0, phase: 0, depth: 0, size: 1 },
+      scatter,
+    );
+  }
+
+  /**
+   * Give a mote a fresh randomised drift, in place.
+   *
+   * Written into the existing object rather than returning a new one: this runs
+   * every time a mote leaves the top of the screen, and the pool exists
+   * precisely so that the field never allocates during play.
+   *
+   * @param {object} mote
+   * @param {boolean} scatter - True to place it anywhere on screen (initial
+   *   fill), false to place it just below the bottom edge (recycling).
+   * @returns {object} The same mote.
+   * @private
+   */
+  _randomise(mote, scatter) {
     const depth = Math.random();
-    return {
-      x: Math.random() * GAME_WIDTH,
-      y: scatter ? Math.random() * GAME_HEIGHT : GAME_HEIGHT + Math.random() * 8,
-      prevX: 0,
-      prevY: 0,
-      // Nearer motes rise faster - the same cue as the brightness ramp.
-      riseSpeed: 4 + depth * 12,
-      swayAmount: 3 + Math.random() * 7,
-      swaySpeed: 0.4 + Math.random() * 0.9,
-      phase: Math.random() * Math.PI * 2,
-      depth,
-      size: depth > 0.72 ? 2 : 1,
-    };
+
+    mote.x = Math.random() * GAME_WIDTH;
+    mote.y = scatter ? Math.random() * GAME_HEIGHT : GAME_HEIGHT + Math.random() * 8;
+    // Nearer motes rise faster - the same cue as the brightness ramp.
+    mote.riseSpeed = 4 + depth * 12;
+    mote.swayAmount = 3 + Math.random() * 7;
+    mote.swaySpeed = 0.4 + Math.random() * 0.9;
+    mote.phase = Math.random() * Math.PI * 2;
+    mote.depth = depth;
+    mote.size = depth > 0.72 ? 2 : 1;
+
+    return mote;
   }
 
   /**
@@ -146,7 +165,7 @@ export class Spores {
    * @private
    */
   _resetMote(mote) {
-    Object.assign(mote, this._createMote(false));
+    this._randomise(mote, false);
     mote.prevX = mote.x;
     mote.prevY = mote.y;
   }

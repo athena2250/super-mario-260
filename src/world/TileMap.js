@@ -20,7 +20,7 @@ import {
   isPlatform,
   isHazard,
 } from './tiles.js';
-import { drawTile } from './tileArt.js';
+import { TileLayer } from './TileLayer.js';
 
 export class TileMap {
   /**
@@ -56,6 +56,14 @@ export class TileMap {
     this.objects = [];
 
     this._parse(definition.rows);
+
+    /**
+     * Pre-rendered artwork for the grid. Built after parsing, because it paints
+     * the tiles this constructor has just read.
+     * @type {TileLayer}
+     * @private
+     */
+    this._layer = new TileLayer(this);
   }
 
   /**
@@ -68,6 +76,10 @@ export class TileMap {
   setTile(col, row, tile) {
     if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return;
     this.tiles[row * this.cols + col] = tile;
+
+    // The artwork is cached, so a swapped tile has to be repainted or the
+    // bridge would stay a ghost on screen while being solid to walk on.
+    this._layer.invalidateTile(col, row);
   }
 
   /**
@@ -169,35 +181,42 @@ export class TileMap {
    * @returns {{colStart: number, colEnd: number, rowStart: number, rowEnd: number}}
    */
   rangeFor(rect) {
-    return {
-      colStart: Math.max(0, this.colAt(rect.x)),
-      colEnd: Math.min(this.cols - 1, this.colAt(rect.x + rect.width - 0.0001)),
-      rowStart: Math.max(0, this.rowAt(rect.y)),
-      rowEnd: Math.min(this.rows - 1, this.rowAt(rect.y + rect.height - 0.0001)),
-    };
+    return this.rangeInto(rect, { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 });
+  }
+
+  /**
+   * As {@link rangeFor}, but writing into a caller-owned object.
+   *
+   * Collision runs three of these per body per step, and the numbers are read
+   * and discarded immediately, so the hot path passes its own scratch rather
+   * than allocating.
+   *
+   * @param {{x: number, y: number, width: number, height: number}} rect
+   * @param {{colStart: number, colEnd: number, rowStart: number, rowEnd: number}} out
+   * @returns {{colStart: number, colEnd: number, rowStart: number, rowEnd: number}} `out`.
+   */
+  rangeInto(rect, out) {
+    out.colStart = Math.max(0, this.colAt(rect.x));
+    out.colEnd = Math.min(this.cols - 1, this.colAt(rect.x + rect.width - 0.0001));
+    out.rowStart = Math.max(0, this.rowAt(rect.y));
+    out.rowEnd = Math.min(this.rows - 1, this.rowAt(rect.y + rect.height - 0.0001));
+    return out;
   }
 
   /**
    * Draw every tile intersecting the view.
    *
-   * Culling to the view is what keeps the cost proportional to the screen
-   * rather than to the level: a 500-tile-wide level draws exactly as many tiles
-   * as a 30-tile one.
+   * The work is delegated to {@link TileLayer}, which blits pre-rendered
+   * artwork. Culling still keeps the cost proportional to the screen rather
+   * than to the level: a 500-tile-wide level blits exactly as much as a
+   * 30-tile one.
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {{x: number, y: number, width: number, height: number}} view - World
    *   -space rectangle currently on screen.
    */
   render(ctx, view) {
-    const range = this.rangeFor(view);
-
-    for (let row = range.rowStart; row <= range.rowEnd; row++) {
-      const rowOffset = row * this.cols;
-      for (let col = range.colStart; col <= range.colEnd; col++) {
-        const tile = this.tiles[rowOffset + col];
-        if (tile !== TILE.EMPTY) drawTile(ctx, tile, col, row);
-      }
-    }
+    this._layer.render(ctx, view);
   }
 
   /**

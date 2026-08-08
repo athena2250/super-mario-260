@@ -83,28 +83,42 @@ export function measureText(text, scale = 1) {
 }
 
 /**
- * Draw a string.
+ * Rendered strings, keyed by exactly what determines their pixels.
+ *
+ * A glyph is one `fillRect` per lit pixel, so a HUD of five short readouts -
+ * drawn twice each, once for its shadow - costs several hundred fill operations
+ * every frame to redraw text that changes about once a second. Painting each
+ * distinct string once into a small canvas and blitting it afterwards is the
+ * same pixels for one draw call.
+ *
+ * The cache is bounded because the clock alone produces a new string every
+ * second; the oldest entry goes when it is full.
+ *
+ * @type {Map<string, HTMLCanvasElement>}
+ */
+const stringCache = new Map();
+
+/** Entries kept. Comfortably more than any one screen shows at once. */
+const CACHE_LIMIT = 128;
+
+/** Whether this environment can give us a canvas to cache into. */
+const canCache = typeof document !== 'undefined' && typeof document.createElement === 'function';
+
+/**
+ * Paint glyphs directly, one `fillRect` per lit pixel. This is the definition
+ * of what the font looks like; the cache is only a recording of it.
  *
  * @param {CanvasRenderingContext2D} ctx
- * @param {string} text - Case-insensitive; unknown characters render blank.
- * @param {number} x - Left edge, or the anchor point when `align` is set.
+ * @param {string} upper - Already upper-cased.
+ * @param {number} x - Left edge.
  * @param {number} y - Top edge.
- * @param {object} [options]
- * @param {string} [options.color='#fff2c9']
- * @param {number} [options.scale=1] - Whole numbers only, to stay pixel-exact.
- * @param {'left'|'center'|'right'} [options.align='left']
- * @returns {number} The width drawn, in pixels.
+ * @param {string} color
+ * @param {number} scale
  */
-export function drawText(ctx, text, x, y, { color = '#fff2c9', scale = 1, align = 'left' } = {}) {
-  const upper = String(text).toUpperCase();
-  const width = measureText(upper, scale);
-
-  let cursorX = x;
-  if (align === 'center') cursorX = Math.round(x - width / 2);
-  else if (align === 'right') cursorX = Math.round(x - width);
-
+function paintGlyphs(ctx, upper, x, y, color, scale) {
   ctx.fillStyle = color;
 
+  let cursorX = x;
   for (const char of upper) {
     const glyph = GLYPHS[char];
     if (glyph) {
@@ -119,8 +133,52 @@ export function drawText(ctx, text, x, y, { color = '#fff2c9', scale = 1, align 
     }
     cursorX += (GLYPH_WIDTH + LETTER_SPACING) * scale;
   }
+}
 
-  return width;
+/**
+ * The cached canvas for a string, painting it if this is the first time.
+ *
+ * @param {string} upper
+ * @param {number} width - Already measured, in pixels.
+ * @param {string} color
+ * @param {number} scale
+ * @returns {HTMLCanvasElement}
+ */
+function cachedString(upper, width, color, scale) {
+  const key = `${scale}|${color}|${upper}`;
+  const existing = stringCache.get(key);
+  if (existing) return existing;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = GLYPH_HEIGHT * scale;
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  paintGlyphs(ctx, upper, 0, 0, color, scale);
+
+  if (stringCache.size >= CACHE_LIMIT) {
+    stringCache.delete(stringCache.keys().next().value);
+  }
+  stringCache.set(key, canvas);
+  return canvas;
+}
+
+/**
+ * Draw a string.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} text - Case-insensitive; unknown characters render blank.
+ * @param {number} x - Left edge, or the anchor point when `align` is set.
+ * @param {number} y - Top edge.
+ * @param {object} [options]
+ * @param {string} [options.color='#fff2c9']
+ * @param {number} [options.scale=1] - Whole numbers only, to stay pixel-exact.
+ * @param {'left'|'center'|'right'} [options.align='left']
+ * @returns {number} The width drawn, in pixels.
+ */
+export function drawText(ctx, text, x, y, { color = '#fff2c9', scale = 1, align = 'left' } = {}) {
+  return paintString(ctx, String(text).toUpperCase(), x, y, color, scale, align);
 }
 
 /**
@@ -136,7 +194,48 @@ export function drawText(ctx, text, x, y, { color = '#fff2c9', scale = 1, align 
  * @returns {number}
  */
 export function drawTextShadowed(ctx, text, x, y, options = {}) {
-  const { shadowColor = '#1b1033', scale = 1 } = options;
-  drawText(ctx, text, x + scale, y + scale, { ...options, color: shadowColor });
-  return drawText(ctx, text, x, y, options);
+  const {
+    color = '#fff2c9',
+    shadowColor = '#1b1033',
+    scale = 1,
+    align = 'left',
+  } = options;
+
+  const upper = String(text).toUpperCase();
+  paintString(ctx, upper, x + scale, y + scale, shadowColor, scale, align);
+  return paintString(ctx, upper, x, y, color, scale, align);
+}
+
+/**
+ * Shared body of both public draws: work out where the string starts, then
+ * either blit it or paint it.
+ *
+ * The cache is skipped for fractional positions. A `fillRect` at a fractional
+ * coordinate and a `drawImage` at one do not antialias identically, and the
+ * point of this font is that what is drawn is exactly what was asked for.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} upper
+ * @param {number} x
+ * @param {number} y
+ * @param {string} color
+ * @param {number} scale
+ * @param {'left'|'center'|'right'} align
+ * @returns {number} The width drawn, in pixels.
+ */
+function paintString(ctx, upper, x, y, color, scale, align) {
+  const width = measureText(upper, scale);
+  if (width <= 0) return width;
+
+  let cursorX = x;
+  if (align === 'center') cursorX = Math.round(x - width / 2);
+  else if (align === 'right') cursorX = Math.round(x - width);
+
+  if (canCache && Number.isInteger(cursorX) && Number.isInteger(y)) {
+    ctx.drawImage(cachedString(upper, width, color, scale), cursorX, y);
+  } else {
+    paintGlyphs(ctx, upper, cursorX, y, color, scale);
+  }
+
+  return width;
 }

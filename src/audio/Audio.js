@@ -20,6 +20,12 @@
 /** Master output level. Deliberately modest - these are sharp, synthetic tones. */
 const MASTER_GAIN = 0.22;
 
+/**
+ * Length of the shared noise buffer, in seconds. Longer than any impact asks
+ * for, so every one of them can play a prefix of the same samples.
+ */
+const NOISE_SECONDS = 0.25;
+
 export class Audio {
   constructor() {
     /** @type {AudioContext | null} @private */
@@ -28,6 +34,18 @@ export class Audio {
     this._master = null;
     /** @type {boolean} */
     this.muted = false;
+
+    /**
+     * White noise, generated once and shared by every impact.
+     *
+     * Landing is the sound the player triggers most often in a platformer, and
+     * building a buffer per landing meant allocating and filling thousands of
+     * samples in the middle of gameplay. The envelope moved to a gain ramp so
+     * one buffer can serve every duration.
+     * @type {AudioBuffer | null}
+     * @private
+     */
+    this._noiseBuffer = null;
   }
 
   /**
@@ -43,6 +61,8 @@ export class Audio {
       this._master = this._ctx.createGain();
       this._master.gain.value = this.muted ? 0 : MASTER_GAIN;
       this._master.connect(this._ctx.destination);
+
+      this._noiseBuffer = this._createNoiseBuffer();
     }
 
     // Autoplay policies suspend the context; resuming is what actually unlocks.
@@ -251,23 +271,39 @@ export class Audio {
    * @private
    */
   _noise({ duration, gain = 0.2 }) {
-    if (!this._ctx || this.muted) return;
+    if (!this._ctx || this.muted || !this._noiseBuffer) return;
 
-    const frames = Math.floor(this._ctx.sampleRate * duration);
-    const buffer = this._ctx.createBuffer(1, frames, this._ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < frames; i++) {
-      // Fading the noise as it is generated saves a second gain ramp.
-      data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
-    }
-
+    const start = this._ctx.currentTime;
     const source = this._ctx.createBufferSource();
     const envelope = this._ctx.createGain();
-    source.buffer = buffer;
-    envelope.gain.value = gain;
+
+    source.buffer = this._noiseBuffer;
+
+    // The fade used to be baked into the samples. Ramping the gain instead is
+    // the same linear decay, and it is what lets one buffer serve every impact
+    // whatever length it asks for.
+    envelope.gain.setValueAtTime(gain, start);
+    envelope.gain.linearRampToValueAtTime(0, start + duration);
 
     source.connect(envelope);
     envelope.connect(this._master);
-    source.start();
+    source.start(start);
+    source.stop(start + duration);
+  }
+
+  /**
+   * One buffer of flat white noise, reused by every impact.
+   *
+   * @returns {AudioBuffer}
+   * @private
+   */
+  _createNoiseBuffer() {
+    const frames = Math.floor(this._ctx.sampleRate * NOISE_SECONDS);
+    const buffer = this._ctx.createBuffer(1, frames, this._ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+
+    return buffer;
   }
 }

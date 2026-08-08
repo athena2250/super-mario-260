@@ -99,10 +99,8 @@ export class TouchControls {
   render(ctx) {
     if (!this.visible || !this.enabled) return;
 
-    const active = new Set(this._pointers.values());
-
     for (const button of this.buttons) {
-      const pressed = active.has(button.action);
+      const pressed = this._isHeld(button.action);
 
       ctx.globalAlpha = pressed ? 0.5 : 0.24;
       ctx.fillStyle = PALETTE.lanternCore;
@@ -114,6 +112,24 @@ export class TouchControls {
     }
 
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Is any finger currently on this button?
+   *
+   * Scanned rather than collected into a set: there are never more than a
+   * handful of live pointers, and this runs every frame on exactly the devices
+   * with the least headroom to spare.
+   *
+   * @param {string} action
+   * @returns {boolean}
+   * @private
+   */
+  _isHeld(action) {
+    for (const held of this._pointers.values()) {
+      if (held === action) return true;
+    }
+    return false;
   }
 
   /** Detach listeners. */

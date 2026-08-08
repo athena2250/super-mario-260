@@ -29,6 +29,36 @@ import {
 } from './Interactions.js';
 import { PALETTE, TILE_SIZE, DEBUG } from '../core/Config.js';
 
+/**
+ * Pixels beyond the view within which an object is still drawn.
+ *
+ * Generous on purpose: several things are drawn much larger than the collision
+ * box they are culled by - a beacon's ignition ring reaches 30 px past the
+ * post, the chest throws light 34 px above itself - and an effect that pops in
+ * at the screen edge is worse than the handful of fills the margin costs.
+ */
+const CULL_PADDING = 48;
+
+/**
+ * Is any part of this object near enough to the view to be worth drawing?
+ *
+ * Culling applies to **drawing only**. Everything in the level keeps simulating
+ * wherever it is, so a creature's patrol is at exactly the phase the player
+ * would expect when they arrive.
+ *
+ * @param {import('../entities/Entity.js').Entity} entity
+ * @param {{x: number, y: number, width: number, height: number}} view
+ * @returns {boolean}
+ */
+function isNearView(entity, view) {
+  return (
+    entity.x + entity.width > view.x - CULL_PADDING &&
+    entity.x < view.x + view.width + CULL_PADDING &&
+    entity.y + entity.height > view.y - CULL_PADDING &&
+    entity.y < view.y + view.height + CULL_PADDING
+  );
+}
+
 export class World {
   /**
    * @param {object} definition - A level definition module.
@@ -149,18 +179,26 @@ export class World {
   render(ctx, alpha, view) {
     this.map.render(ctx, view);
 
-    for (const tablet of this.tablets) tablet.render(ctx);
-    for (const runeSwitch of this.switches) runeSwitch.render(ctx);
-    for (const checkpoint of this.checkpoints) checkpoint.render(ctx);
-    this.chest?.render(ctx);
+    for (const tablet of this.tablets) {
+      if (isNearView(tablet, view)) tablet.render(ctx);
+    }
+    for (const runeSwitch of this.switches) {
+      if (isNearView(runeSwitch, view)) runeSwitch.render(ctx);
+    }
+    for (const checkpoint of this.checkpoints) {
+      if (isNearView(checkpoint, view)) checkpoint.render(ctx);
+    }
+    if (this.chest && isNearView(this.chest, view)) this.chest.render(ctx);
 
     for (const shard of this.shards) {
-      if (!shard.collected) shard.render(ctx);
+      if (!shard.collected && isNearView(shard, view)) shard.render(ctx);
     }
-    for (const platform of this.platforms) platform.render(ctx, alpha);
+    for (const platform of this.platforms) {
+      if (isNearView(platform, view)) platform.render(ctx, alpha);
+    }
 
     for (const enemy of this.enemies) {
-      if (enemy.alive) enemy.render(ctx, alpha);
+      if (enemy.alive && isNearView(enemy, view)) enemy.render(ctx, alpha);
     }
 
     this.particles.render(ctx, alpha);

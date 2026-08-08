@@ -35,6 +35,23 @@ export class Entity {
 
     /** Set false to have the world skip and eventually reap this entity. */
     this.alive = true;
+
+    /**
+     * Last step's tile contact flags. Owned per entity and written in place by
+     * `moveAndCollide`, rather than a fresh object per step: a body's contact
+     * is read straight after its move, and one object per body per step was the
+     * largest single source of garbage in the simulation.
+     * @type {{grounded: boolean, ceiling: boolean, wall: boolean, hazard: boolean}}
+     */
+    this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
+
+    /**
+     * Scratch for {@link getRenderPosition}. Reused so that drawing allocates
+     * nothing; see that method for the one rule it imposes on callers.
+     * @type {{x: number, y: number}}
+     * @private
+     */
+    this._renderPos = { x, y };
   }
 
   get left() {
@@ -96,14 +113,18 @@ export class Entity {
   /**
    * Interpolated draw position, rounded to whole pixels to keep sprites crisp.
    *
+   * The returned object belongs to this entity and is overwritten by the next
+   * call on it, so read the values out rather than holding on to it. Every
+   * caller destructures it immediately, and rendering is the one place where
+   * allocating per entity per frame is worth avoiding.
+   *
    * @param {number} alpha - Interpolation factor from the loop, 0..1.
    * @returns {{x: number, y: number}}
    */
   getRenderPosition(alpha) {
-    return {
-      x: Math.round(this.prevX + (this.x - this.prevX) * alpha),
-      y: Math.round(this.prevY + (this.y - this.prevY) * alpha),
-    };
+    this._renderPos.x = Math.round(this.prevX + (this.x - this.prevX) * alpha);
+    this._renderPos.y = Math.round(this.prevY + (this.y - this.prevY) * alpha);
+    return this._renderPos;
   }
 
   /**
