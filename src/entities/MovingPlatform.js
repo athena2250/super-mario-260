@@ -114,17 +114,6 @@ export class MovingPlatform extends Entity {
     return true;
   }
 
-  /** Return to the start of the run. */
-  reset() {
-    this.x = this._origin.x;
-    this.y = this._origin.y;
-    this._direction = 1;
-    this._wait = PLATFORM.waitTime;
-    this.deltaX = 0;
-    this.deltaY = 0;
-    this.snapToPosition();
-  }
-
   /**
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} alpha

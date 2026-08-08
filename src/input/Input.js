@@ -37,6 +37,7 @@ const KEY_BINDINGS = Object.freeze({
   KeyJ: 'run',
   Escape: ['pause', 'back'],
   KeyP: 'pause',
+  KeyM: 'mute',
 });
 
 /**

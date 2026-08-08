@@ -46,6 +46,7 @@ stalled tab from triggering a catch-up death spiral — deltas are clamped to
 | Drop through platform | `↓` / `S` | — |
 | Jump / stomp | `Space` / `W` / `↑` | On-screen ▲ |
 | Pause | `Esc` / `P` | On-screen ⏸ |
+| Mute | `M` | — |
 
 Jump height is analogue — tap for a hop (~1.5 tiles), hold for a full leap
 (~3.1 tiles up, ~5 tiles across at a run). Jumps are forgiving by design: a

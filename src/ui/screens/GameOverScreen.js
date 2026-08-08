@@ -16,7 +16,7 @@ export class GameOverScreen extends OutcomeScreen {
       title: 'THE DARK WINS',
       color: PALETTE.thistle,
       shadowColor: PALETTE.thistleDark,
-      lines: ['PIPS LANTERN HAS GONE OUT', 'THE HOLLOW IS PATIENT - TRY AGAIN'],
+      lines: ['PIPS LANTERN HAS GONE OUT', 'THE BEACONS GO DARK - START AGAIN'],
       items: [
         { id: 'retry', label: 'TRY AGAIN' },
         { id: 'levelSelect', label: 'LEVEL SELECT' },

@@ -130,21 +130,6 @@ export class PuzzleController {
   }
 
   /**
-   * Restore the puzzle to its unsolved state, including the tile grid. Called
-   * when the level restarts.
-   */
-  reset() {
-    this.progress = 0;
-    this.solved = false;
-    this.open = false;
-    this._raised = 0;
-    this._timer = 0;
-
-    for (const runeSwitch of this._switches) runeSwitch.reset();
-    if (this._tablet) this._tablet.progress = 0;
-  }
-
-  /**
    * Darken every rune and start the sequence over.
    * @private
    */

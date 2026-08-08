@@ -215,8 +215,14 @@ export class Hud {
 
     // One throb per beat, never fading far enough to become hard to read.
     const beat = style.pulse > 0 ? (Math.sin(this._time * style.pulse) + 1) / 2 : 1;
+
+    // The jitter alternates on the HUD's own fixed-step clock rather than on
+    // `Math.random` per frame: a 144 Hz display would otherwise shake the
+    // readout more than twice as fast as a 60 Hz one.
     const jitter =
-      style.shake > 0 && beat > 0.75 ? (Math.random() < 0.5 ? -style.shake : style.shake) : 0;
+      style.shake > 0 && beat > 0.75
+        ? (Math.floor(this._time * 30) % 2 === 0 ? -style.shake : style.shake)
+        : 0;
 
     if (urgency >= URGENCY.ALARM) this._renderAlarmEdge(ctx, urgency, beat);
 

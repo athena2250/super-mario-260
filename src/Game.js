@@ -216,6 +216,9 @@ export class Game {
     const transitioning = this.app.busy;
     this.app.update(dt);
 
+    // Muting works from anywhere, including the menus, which make sound too.
+    if (this.input.justPressed('mute')) this._toggleMute();
+
     const screen = this.screens[this.app.state];
     if (screen) {
       // A screen laid over the level leaves the level exactly as it was: the
@@ -273,6 +276,16 @@ export class Game {
     }
 
     if (this.state.endingSettled) this._onGameOver();
+  }
+
+  /**
+   * Silence the game, or bring it back.
+   * @private
+   */
+  _toggleMute() {
+    const muted = this.audio.toggleMute();
+    if (!muted) this.audio.menuSelect();
+    this.hud.showMessage(muted ? 'SOUND OFF' : 'SOUND ON', PALETTE.hazeGlow, 1.2);
   }
 
   /**
@@ -497,6 +510,10 @@ export class Game {
    * @private
    */
   _goto(state, work) {
+    // A level being left takes its intro card with it, or the card would sit
+    // frozen behind whatever screen replaced the level.
+    if (state !== STATE.PLAYING) this.levelIntro.hide();
+
     this.app.go(state, {
       reenter: true,
       onSwap: () => {
@@ -579,10 +596,11 @@ export class Game {
         this.audio.stomp();
         this.camera.shake(2);
       },
-      // A creature knocks Pip back but leaves him where he is. Only terrain
-      // sends him back to a checkpoint, because only terrain has moved him
-      // somewhere he cannot be.
-      hurt: () => this._loseLife({ returnToCheckpoint: false }),
+      // Every way of dying costs the same and returns Pip to the same place -
+      // the last beacon he lit. A creature that only knocked him back would
+      // make one kind of death cheaper than another for no reason the player
+      // could see.
+      hurt: () => this._loseLife(),
       rune: (runeSwitch, progress) => {
         this.audio.runeCorrect(progress - 1);
         this.hud.showMessage('RUNE LIT', runeSwitch.color);
@@ -648,45 +666,52 @@ export class Game {
     const fellOut = this.player.top > this.world.map.pixelHeight;
     if (!this.player.contact.hazard && !fellOut) return;
 
-    this._loseLife({ returnToCheckpoint: true });
+    this._loseLife();
   }
 
   /**
-   * Deduct a life, and either recover or end the run.
+   * Deduct a life, and either send Pip back to his last beacon or end the run.
    *
-   * @param {object} options
-   * @param {boolean} options.returnToCheckpoint - True for terrain deaths,
-   *   false for creature contact, which only knocks Pip back.
+   * With lives left he returns to the most recent beacon - or to the level's
+   * start if he has not lit one. With none left the run is over, so he goes
+   * back to the start whatever he lit, and the game-over screen comes up over a
+   * level that is already reset behind it.
+   *
    * @private
    */
-  _loseLife({ returnToCheckpoint }) {
+  _loseLife() {
     const lastLife = this.state.loseLife();
     this.camera.shake(lastLife ? 4 : 2.5);
+
+    // A burst where he was lost, so a death off screen still reads as a death
+    // rather than as Pip having teleported for no reason.
+    this.world.particles.emit({
+      x: this.player.centerX,
+      y: this.player.centerY,
+      count: 18,
+      color: PALETTE.lantern,
+      speed: 90,
+      gravity: 160,
+      life: 0.6,
+    });
 
     if (lastLife) {
       this.audio.gameOver();
       this.hud.showMessage('THE HOLLOW WINS', PALETTE.thistle, 2.2);
+      this.player.returnToStart();
+      this.camera.snapTo(this.player);
       return;
     }
 
     this.audio.hurt();
+    this.player.respawn();
+    this.camera.snapTo(this.player);
+    this.hud.flashRespawn();
 
-    if (returnToCheckpoint) {
-      // A burst where he was lost, so a death off screen still reads as a
-      // death rather than as Pip having teleported for no reason.
-      this.world.particles.emit({
-        x: this.player.centerX,
-        y: this.player.centerY,
-        count: 18,
-        color: PALETTE.lantern,
-        speed: 90,
-        gravity: 160,
-        life: 0.6,
-      });
-
-      this.player.respawn();
-      this.camera.snapTo(this.player);
-      this.hud.flashRespawn();
+    // Only worth saying once a beacon is actually behind him; before that,
+    // "back to the beacon" would name something the player has never seen.
+    if (this.state.checkpoints > 0) {
+      this.hud.showMessage('BACK TO THE BEACON', PALETTE.lanternCore, 1.6);
     }
   }
 

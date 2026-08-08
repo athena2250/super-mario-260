@@ -85,12 +85,6 @@ export class Checkpoint extends Entity {
     return true;
   }
 
-  /** Put it out. Used when the level restarts. */
-  reset() {
-    this.lit = false;
-    this._ignite = 0;
-  }
-
   /**
    * @param {number} dt
    */

@@ -9,6 +9,10 @@
  * into score or audio directly, so the world has no opinion about what a
  * stomp is worth or what it sounds like.
  *
+ * A world is never put back to its starting state: restarting a level builds a
+ * new one. One way to begin a level means there is no second path that could
+ * miss something and leave a rune half-lit or a bridge still standing.
+ *
  * @module world/World
  */
 
@@ -133,26 +137,6 @@ export class World {
     this.particles.update(dt);
 
     this._resolveInteractions(player);
-  }
-
-  /**
-   * Put the level back to its authored state: tiles, creatures, shards, runes,
-   * platforms and the chest.
-   */
-  reset() {
-    this.map.reset();
-    this.particles.clear();
-    this.puzzle.reset();
-
-    for (const enemy of this.enemies) enemy.reset();
-    for (const platform of this.platforms) platform.reset();
-    for (const checkpoint of this.checkpoints) checkpoint.reset();
-    for (const shard of this.shards) {
-      shard.collected = false;
-      shard.alive = true;
-    }
-    this.chest?.reset();
-    for (const tablet of this.tablets) tablet.progress = 0;
   }
 
   /**

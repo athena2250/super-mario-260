@@ -48,9 +48,6 @@ export class Player extends Entity {
     /** True while braking hard against the direction of travel. @type {boolean} */
     this.skidding = false;
 
-    /** Where the level begins, and where `restart()` returns to. */
-    this.spawnPoint = { x, y };
-
     /**
      * Where a death returns Pip to: the last beacon he lit, or the level's
      * start until he lights one. Set from outside rather than inferred, because
@@ -59,6 +56,14 @@ export class Player extends Entity {
      * @type {{x: number, y: number}}
      */
     this.respawnPoint = { x, y };
+
+    /**
+     * Where the level began. Kept separate from {@link respawnPoint} because
+     * the last life spent sends Pip back here regardless of which beacons he
+     * lit - the run restarts, so the beacons no longer count.
+     * @type {{x: number, y: number}}
+     */
+    this.startPoint = { x, y };
 
     /** Last step's tile contact flags. @type {import('../physics/TileCollision.js').Contact} */
     this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
@@ -194,12 +199,14 @@ export class Player extends Entity {
   }
 
   /**
-   * Return to the level's start and forget any beacon. Used when the whole
-   * level restarts.
+   * Return to where the level began, discarding the beacons lit along the way.
+   * Used when the last life is spent: the run is over, so a respawn point
+   * earned during it must not survive into the next attempt.
    */
-  restart() {
-    this.setRespawnPoint(this.spawnPoint.x, this.spawnPoint.y);
-    this._returnTo(this.spawnPoint);
+  returnToStart() {
+    this.respawnPoint.x = this.startPoint.x;
+    this.respawnPoint.y = this.startPoint.y;
+    this._returnTo(this.startPoint);
   }
 
   /**
@@ -217,6 +224,11 @@ export class Player extends Entity {
     this.riding = null;
     this._invulnerable = RULES.invulnerableTime;
     this.jump.reset();
+
+    // The contact flags describe the position Pip has just left. Left standing,
+    // the spikes he died on would be read again from here and cost a second
+    // life on the very next step.
+    this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
 
     // Without this the renderer would draw Pip streaking across the level from
     // wherever he died back to the spawn point.

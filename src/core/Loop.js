@@ -43,9 +43,6 @@ export class Loop {
     /** Smoothed frames per second, for the debug readout. @type {number} */
     this.fps = 0;
 
-    /** Total simulated time in seconds. Useful for animation phases. */
-    this.elapsed = 0;
-
     /** Leftover simulation time carried between frames. @private */
     this._accumulator = 0;
     /** Timestamp of the previous frame, in ms. @private */
@@ -111,7 +108,6 @@ export class Loop {
     while (this._accumulator >= FIXED_STEP && steps < MAX_STEPS_PER_FRAME) {
       this._update(FIXED_STEP);
       this._accumulator -= FIXED_STEP;
-      this.elapsed += FIXED_STEP;
       steps += 1;
     }
 

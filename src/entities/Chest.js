@@ -92,14 +92,6 @@ export class Chest extends Entity {
     return true;
   }
 
-  /** Reseal. Used on level restart. */
-  reset() {
-    this.opening = false;
-    this.opened = false;
-    this._openTime = 0;
-    this._refuseCooldown = 0;
-  }
-
   /**
    * @param {CanvasRenderingContext2D} ctx
    */

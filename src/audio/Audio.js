@@ -9,6 +9,11 @@
  * created lazily on the first input and every call is a no-op until then. Sound
  * is a garnish here: if it never unlocks, the game still plays correctly.
  *
+ * The context is created even while muted - muting only turns the master gain
+ * down. Skipping creation would mean a player who mutes before their first
+ * keypress never gets a context at all, and unmuting later would silently do
+ * nothing, because the gesture that could have created one has passed.
+ *
  * @module audio/Audio
  */
 
@@ -30,15 +35,13 @@ export class Audio {
    * Must be called from inside a user-gesture handler the first time.
    */
   unlock() {
-    if (this.muted) return;
-
     if (!this._ctx) {
       const Ctor = window.AudioContext ?? window.webkitAudioContext;
       if (!Ctor) return;
 
       this._ctx = new Ctor();
       this._master = this._ctx.createGain();
-      this._master.gain.value = MASTER_GAIN;
+      this._master.gain.value = this.muted ? 0 : MASTER_GAIN;
       this._master.connect(this._ctx.destination);
     }
 

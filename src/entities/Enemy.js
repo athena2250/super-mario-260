@@ -1,11 +1,11 @@
 /**
  * Base class for the Hollow's creatures.
  *
- * Holds everything the three species share: spawn memory (so a level restart
- * puts them all back), the defeat animation, and the "is this touch a stomp or
- * a hit?" test. Species-specific movement lives in the subclasses, which
- * override `think()` rather than `update()` - that way none of them can forget
- * to save their previous position or tick their animation clock.
+ * Holds everything the three species share: where they were placed, the defeat
+ * animation, and the "is this touch a stomp or a hit?" test. Species-specific
+ * movement lives in the subclasses, which override `think()` rather than
+ * `update()` - that way none of them can forget to save their previous position
+ * or tick their animation clock.
  *
  * @module entities/Enemy
  */
@@ -30,7 +30,12 @@ export class Enemy extends Entity {
   constructor(x, y, width, height) {
     super(x, y, width, height);
 
-    /** Everything needed to put this creature back where it started. @private */
+    /**
+     * Where this creature was placed. Species that patrol a fixed path rather
+     * than reading the terrain - the Wisp - measure their route from here.
+     * @type {{x: number, y: number}}
+     * @protected
+     */
     this._spawn = { x, y };
 
     /** Facing direction: -1 left, +1 right. @type {number} */
@@ -112,20 +117,6 @@ export class Enemy extends Entity {
   get defeatProgress() {
     if (!this.defeated) return 0;
     return 1 - Math.max(0, this._defeatTimer) / ENEMY.deathTime;
-  }
-
-  /** Return to the spawn position with all state cleared. */
-  reset() {
-    this.x = this._spawn.x;
-    this.y = this._spawn.y;
-    this.vx = 0;
-    this.vy = 0;
-    this.facing = 1;
-    this.animTime = 0;
-    this.alive = true;
-    this.defeated = false;
-    this._defeatTimer = 0;
-    this.snapToPosition();
   }
 
   /**

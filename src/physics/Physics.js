@@ -42,31 +42,3 @@ export function applyGravity(body, dt, options = {}) {
 
   body.vy = Math.min(body.vy + gravity * scale * dt, maxFall);
 }
-
-/**
- * Move a value toward a target by at most `maxDelta`, without overshooting.
- * Used for friction and acceleration ramps.
- *
- * @param {number} current
- * @param {number} target
- * @param {number} maxDelta - Always treated as positive.
- * @returns {number}
- */
-export function moveToward(current, target, maxDelta) {
-  const difference = target - current;
-  if (Math.abs(difference) <= maxDelta) return target;
-  return current + Math.sign(difference) * maxDelta;
-}
-
-/**
- * Predicted peak height of a jump, in pixels. Not used by the simulation - it
- * exists so level design and tests can assert what Pip can actually clear
- * instead of guessing from the tuning constants.
- *
- * @param {number} [jumpSpeed]
- * @param {number} [gravity]
- * @returns {number}
- */
-export function jumpApexHeight(jumpSpeed = PHYSICS.jumpSpeed, gravity = PHYSICS.gravity) {
-  return (jumpSpeed * jumpSpeed) / (2 * gravity);
-}

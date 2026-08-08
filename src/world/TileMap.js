@@ -56,14 +56,6 @@ export class TileMap {
     this.objects = [];
 
     this._parse(definition.rows);
-
-    /**
-     * Pristine copy of the grid, taken before anything can mutate it. Restoring
-     * from this is how a level restart undoes opened vaults and raised bridges.
-     * @type {Uint8Array}
-     * @private
-     */
-    this._originalTiles = this.tiles.slice();
   }
 
   /**
@@ -93,11 +85,6 @@ export class TileMap {
       }
     }
     return found;
-  }
-
-  /** Restore every tile to its authored state. */
-  reset() {
-    this.tiles.set(this._originalTiles);
   }
 
   /** Level width in pixels. @returns {number} */

@@ -191,9 +191,7 @@ export class Menu {
    */
   render(ctx) {
     this.items.forEach((item, index) => {
-      const selected = index === this.index;
-      const bounds = this.boundsOf(index);
-      this._renderButton(ctx, item, bounds, selected);
+      this._renderButton(ctx, item, index, this.boundsOf(index));
     });
   }
 
@@ -228,12 +226,13 @@ export class Menu {
   /**
    * @param {CanvasRenderingContext2D} ctx
    * @param {MenuItem} item
+   * @param {number} index - Passed rather than looked up: two items may be
+   *   equal, and a search would then animate the wrong one.
    * @param {{x: number, y: number, width: number, height: number}} bounds
-   * @param {boolean} selected
    * @private
    */
-  _renderButton(ctx, item, bounds, selected) {
-    const index = this.items.indexOf(item);
+  _renderButton(ctx, item, index, bounds) {
+    const selected = index === this.index;
     const entry = this._entryOf(index);
     if (entry.alpha <= 0) return;
 

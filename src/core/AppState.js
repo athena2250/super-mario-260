@@ -47,9 +47,6 @@ export class AppState {
     /** The screen currently being updated and drawn. @type {string} */
     this.state = initial;
 
-    /** The screen departed from, for screens that want to go "back". @type {string|null} */
-    this.previous = null;
-
     /** @type {string} @private */
     this._fadePhase = FADE.IDLE;
 
@@ -169,7 +166,6 @@ export class AppState {
    * @private
    */
   _swapTo(state) {
-    this.previous = this.state;
     this.state = state;
   }
 }

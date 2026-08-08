@@ -39,9 +39,6 @@ export class Viewport {
     /** Current CSS-pixels-per-logical-pixel scale factor. @type {number} */
     this.scale = 1;
 
-    /** Listeners invoked after each resize. @type {Set<(v: Viewport) => void>} */
-    this._resizeListeners = new Set();
-
     // Bound so it can be added and removed as the same reference.
     this._onResize = this.resize.bind(this);
 
@@ -58,18 +55,6 @@ export class Viewport {
   /** Logical render height in pixels. @returns {number} */
   get height() {
     return GAME_HEIGHT;
-  }
-
-  /**
-   * Register a callback fired whenever the viewport is resized. Returns an
-   * unsubscribe function so callers never have to hold onto the reference.
-   *
-   * @param {(viewport: Viewport) => void} listener
-   * @returns {() => void} Unsubscribe function.
-   */
-  onResize(listener) {
-    this._resizeListeners.add(listener);
-    return () => this._resizeListeners.delete(listener);
   }
 
   /**
@@ -97,8 +82,6 @@ export class Viewport {
     // Resizing the element can reset context state on some browsers, so the
     // smoothing flag is reasserted here rather than only at construction.
     this.ctx.imageSmoothingEnabled = false;
-
-    for (const listener of this._resizeListeners) listener(this);
   }
 
   /**
@@ -122,7 +105,6 @@ export class Viewport {
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('orientationchange', this._onResize);
     this._visualViewport?.removeEventListener('resize', this._onResize);
-    this._resizeListeners.clear();
   }
 
   /** Pin the backing store to the logical resolution. @private */
