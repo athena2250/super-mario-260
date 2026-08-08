@@ -226,6 +226,27 @@ export const PLATFORM = Object.freeze({
 });
 
 /**
+ * Interface tuning: screen transitions and menu furniture.
+ *
+ * The fade in is deliberately longer than the fade out. Leaving a screen should
+ * feel decisive - the player already committed - while arriving somewhere new
+ * wants a moment to read.
+ */
+export const UI = Object.freeze({
+  /** Seconds to black out when leaving a screen. */
+  fadeOut: 0.22,
+  /** Seconds to fade up on the screen arrived at. */
+  fadeIn: 0.3,
+  /** Colour of the transition curtain. */
+  curtain: '#0d0b1a',
+
+  /** Menu button geometry, in logical pixels. */
+  buttonWidth: 132,
+  buttonHeight: 20,
+  buttonGap: 8,
+});
+
+/**
  * Developer switches. Flip these while working on a milestone; they should all
  * be false on any commit that is meant to be played.
  */

@@ -38,6 +38,13 @@ export class TouchControls {
      */
     this.visible = false;
 
+    /**
+     * Whether the pad accepts touches at all. Turned off outside gameplay so a
+     * tap aimed at a menu button cannot also press jump.
+     * @type {boolean}
+     */
+    this.enabled = true;
+
     const bottom = GAME_HEIGHT - MARGIN;
 
     /** @type {Array<{action: string, x: number, y: number, w: number, h: number}>} */
@@ -68,8 +75,24 @@ export class TouchControls {
    * Draw the pad. Call after the world so the controls sit on top.
    * @param {CanvasRenderingContext2D} ctx
    */
+  /**
+   * Enable or disable the pad. Disabling releases anything held, so an action
+   * cannot stay stuck on across a screen change.
+   *
+   * @param {boolean} enabled
+   */
+  setEnabled(enabled) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+
+    if (enabled) return;
+    for (const pointerId of [...this._pointers.keys()]) {
+      this._releasePointerAction(pointerId);
+    }
+  }
+
   render(ctx) {
-    if (!this.visible) return;
+    if (!this.visible || !this.enabled) return;
 
     const active = new Set(this._pointers.values());
 
@@ -104,6 +127,7 @@ export class TouchControls {
    * @private
    */
   _onPointerDown(event) {
+    if (!this.enabled) return;
     if (event.pointerType === 'touch') this.visible = true;
     if (!this.visible) return;
 

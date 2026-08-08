@@ -53,6 +53,27 @@ export class Audio {
     return this.muted;
   }
 
+  /** Moving the highlight in a menu: a soft, short tick. */
+  menuMove() {
+    this._tone({ type: 'triangle', from: 620, to: 740, duration: 0.05, gain: 0.22 });
+  }
+
+  /** Committing to a menu choice: the tick, answered an octave up. */
+  menuSelect() {
+    this._tone({ type: 'triangle', from: 660, to: 660, duration: 0.07, gain: 0.32 });
+    this._tone({ type: 'triangle', from: 990, to: 990, duration: 0.12, gain: 0.26, delay: 0.06 });
+  }
+
+  /** Backing out of a screen: the same shape, falling instead of rising. */
+  menuBack() {
+    this._tone({ type: 'triangle', from: 520, to: 340, duration: 0.12, gain: 0.26 });
+  }
+
+  /** A choice that is not available yet. Flat and short - a closed door. */
+  menuRefused() {
+    this._tone({ type: 'square', from: 180, to: 150, duration: 0.14, gain: 0.22 });
+  }
+
   /** A short rising blip. Pip leaving the ground. */
   jump() {
     this._tone({ type: 'square', from: 320, to: 620, duration: 0.13, gain: 0.5 });

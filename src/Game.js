@@ -13,8 +13,10 @@ import { Viewport } from './core/Viewport.js';
 import { Loop } from './core/Loop.js';
 import { Camera } from './core/Camera.js';
 import { GameState, PHASE } from './core/GameState.js';
+import { AppState, STATE } from './core/AppState.js';
 import { PALETTE, DEBUG, PLAYER, TILE_SIZE } from './core/Config.js';
 import { Input } from './input/Input.js';
+import { Pointer } from './input/Pointer.js';
 import { TouchControls } from './input/TouchControls.js';
 import { Audio } from './audio/Audio.js';
 import { Spores } from './world/Spores.js';
@@ -22,6 +24,9 @@ import { World } from './world/World.js';
 import { Player } from './entities/Player.js';
 import { Hud } from './ui/Hud.js';
 import { VictoryScreen } from './ui/VictoryScreen.js';
+import { MenuBackdrop } from './ui/MenuBackdrop.js';
+import { TitleScreen } from './ui/screens/TitleScreen.js';
+import { HowToPlayScreen } from './ui/screens/HowToPlayScreen.js';
 import { renderDebugOverlay } from './ui/DebugOverlay.js';
 import { level01 } from './levels/level01.js';
 
@@ -49,11 +54,30 @@ export class Game {
     /** @type {Input} */
     this.input = new Input();
 
+    /** Cursor and taps, for the menus only. @type {Pointer} */
+    this.pointer = new Pointer(this.viewport);
+
     /** @type {TouchControls} */
     this.touchControls = new TouchControls(this.viewport, this.input);
 
     /** @type {Audio} */
     this.audio = new Audio();
+
+    /** Which screen the game is on. @type {AppState} */
+    this.app = new AppState(STATE.MAIN_MENU);
+
+    /** Scenery drawn behind every menu. @type {MenuBackdrop} */
+    this.backdrop = new MenuBackdrop();
+
+    /**
+     * Menu screens, keyed by the state that shows them. A state with no entry
+     * here is a gameplay state and runs the world instead.
+     * @type {Record<string, {enter?: () => void, update: Function, render: Function}>}
+     */
+    this.screens = {
+      [STATE.MAIN_MENU]: new TitleScreen(),
+      [STATE.HOW_TO_PLAY]: new HowToPlayScreen(),
+    };
 
     /** @type {GameState} */
     this.state = new GameState();
@@ -95,6 +119,7 @@ export class Game {
      */
     this._skyGradient = this._createSkyGradient();
 
+    this.screens[STATE.MAIN_MENU].enter();
     this._attachAudioUnlock();
   }
 
@@ -112,6 +137,7 @@ export class Game {
   destroy() {
     this.stop();
     this.touchControls.destroy();
+    this.pointer.destroy();
     this.input.destroy();
     this.viewport.destroy();
   }
@@ -123,6 +149,38 @@ export class Game {
    */
   update(dt) {
     this.spores.update(dt);
+
+    // Read before the transition advances, so a press made during a fade is
+    // dropped rather than landing on the screen that is arriving.
+    const transitioning = this.app.busy;
+    this.app.update(dt);
+
+    const screen = this.screens[this.app.state];
+    if (screen) {
+      this.backdrop.update(dt);
+      const result = screen.update(dt, this.input, this.pointer);
+      if (!transitioning && result) this._handleScreenAction(result);
+    } else {
+      this._updateLevel(dt);
+    }
+
+    // The on-screen pad belongs to gameplay; leaving it live under a menu would
+    // let one tap both press a button and jump.
+    this.touchControls.setEnabled(this.app.is(STATE.PLAYING));
+
+    // Must come last: they clear the just-pressed/just-released edges once every
+    // consumer for this step has read them.
+    this.input.endStep();
+    this.pointer.endStep();
+  }
+
+  /**
+   * One step of an actual level.
+   *
+   * @param {number} dt
+   * @private
+   */
+  _updateLevel(dt) {
     this.state.update(dt);
     this.hud.update(dt);
     this.victory.update(dt);
@@ -140,10 +198,62 @@ export class Game {
       this.camera.update(dt, this.player);
       if (this.victory.complete && this.input.justPressed('jump')) this._restartLevel();
     }
+  }
 
-    // Must come last: it clears the just-pressed/just-released edges once every
-    // consumer for this step has read them.
-    this.input.endStep();
+  /**
+   * Route whatever a menu screen reported into sound and a screen change.
+   *
+   * @param {{action: string, id?: string}} result
+   * @private
+   */
+  _handleScreenAction({ action, id }) {
+    if (action === 'move') {
+      this.audio.menuMove();
+      return;
+    }
+
+    if (action === 'refused') {
+      this.audio.menuRefused();
+      return;
+    }
+
+    if (action !== 'activate') return;
+
+    switch (id) {
+      case 'play':
+        this.audio.menuSelect();
+        this._goto(STATE.PLAYING, () => this._restartLevel());
+        break;
+      case 'howToPlay':
+        this.audio.menuSelect();
+        this._goto(STATE.HOW_TO_PLAY);
+        break;
+      case 'back':
+        this.audio.menuBack();
+        this._goto(STATE.MAIN_MENU);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Change screen, doing the work the change needs while the curtain is down.
+   *
+   * @param {string} state - A {@link STATE} value.
+   * @param {() => void} [work] - Run at the darkest point of the fade.
+   * @private
+   */
+  _goto(state, work) {
+    this.app.go(state, {
+      onSwap: () => {
+        work?.();
+        this.screens[state]?.enter?.();
+        // A menu opened under a resting cursor must not start with that item
+        // selected just because the pointer happens to be there.
+        this.pointer.reset();
+      },
+    });
   }
 
   /**
@@ -157,18 +267,30 @@ export class Game {
 
     ctx.fillStyle = this._skyGradient;
     ctx.fillRect(0, 0, width, height);
-    this.spores.render(ctx, alpha, this.camera.x);
 
-    ctx.save();
-    this.camera.applyTo(ctx);
-    this.world.render(ctx, alpha, this.camera.view);
-    this.player.render(ctx, alpha);
-    ctx.restore();
+    const screen = this.screens[this.app.state];
+    if (screen) {
+      this.backdrop.render(ctx);
+      this.spores.render(ctx, alpha, this.backdrop.drift);
+      screen.render(ctx);
+    } else {
+      this.spores.render(ctx, alpha, this.camera.x);
 
-    this.hud.render(ctx, this.state);
-    this.victory.render(ctx, this.state, this._timeBonus);
+      ctx.save();
+      this.camera.applyTo(ctx);
+      this.world.render(ctx, alpha, this.camera.view);
+      this.player.render(ctx, alpha);
+      ctx.restore();
+
+      this.hud.render(ctx, this.state);
+      this.victory.render(ctx, this.state, this._timeBonus);
+    }
+
     this.touchControls.render(ctx);
     if (DEBUG.showStats) renderDebugOverlay(ctx, this.loop, this.player, this.state);
+
+    // Last of all, so the curtain covers the interface as well as the world.
+    this.app.renderCurtain(ctx, width, height);
   }
 
   /**

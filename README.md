@@ -72,8 +72,10 @@ src/
     Loop.js            Fixed-timestep loop with interpolated rendering
     Camera.js          Follow camera: dead zone, look-ahead, damping, clamping
     GameState.js       Lives, score, shards, timer and the game's phase
+    AppState.js        Which screen the game is on, and the fade between them
   input/
     Input.js           Action state (keyboard bindings, press/release API)
+    Pointer.js         Cursor and taps in game pixels, for the menus
     TouchControls.js   On-screen multitouch pad, drawn into the canvas
   physics/
     Physics.js         Gravity integration and shared math helpers
@@ -105,9 +107,14 @@ src/
     TileMap.js         Tile grid: parsing, queries, mutation, culled rendering
   ui/
     PixelText.js       A 3x5 bitmap font, so text matches the art
+    Menu.js            Vertical button list: keyboard, pointer, animation
+    MenuBackdrop.js    Parallax cavern scenery shared by every menu
     Hud.js             Lives, shards, score, clock and banners
     VictoryScreen.js   The "Treasure Found!" results screen
     DebugOverlay.js    Developer readout
+    screens/
+      TitleScreen.js     Welcome screen: title, subtitle, Play, How To Play
+      HowToPlayScreen.js Controls and objectives
   levels/
     level01.js         "The Shallow Hollow" as editable ASCII art
 ```

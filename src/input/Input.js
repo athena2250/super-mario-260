@@ -10,31 +10,57 @@
  */
 
 /**
- * Physical key -> action. Both WASD and arrows are bound because players expect
- * whichever they already use, and neither costs anything to support.
- * @type {Record<string, string>}
+ * Physical key -> action, or several actions.
+ *
+ * Both WASD and arrows are bound because players expect whichever they already
+ * use, and neither costs anything to support. A key may drive more than one
+ * action: up is both `jump` in the level and `menuUp` in a menu. Because only
+ * one of those consumers is ever listening at a time, binding both to the same
+ * key is what keeps the controls identical everywhere instead of teaching the
+ * player a second, menu-only keyboard.
+ *
+ * @type {Record<string, string|string[]>}
  */
 const KEY_BINDINGS = Object.freeze({
-  ArrowLeft: 'left',
-  KeyA: 'left',
-  ArrowRight: 'right',
-  KeyD: 'right',
-  ArrowDown: 'down',
-  KeyS: 'down',
-  ArrowUp: 'jump',
-  KeyW: 'jump',
-  Space: 'jump',
+  ArrowLeft: ['left', 'menuLeft'],
+  KeyA: ['left', 'menuLeft'],
+  ArrowRight: ['right', 'menuRight'],
+  KeyD: ['right', 'menuRight'],
+  ArrowDown: ['down', 'menuDown'],
+  KeyS: ['down', 'menuDown'],
+  ArrowUp: ['jump', 'menuUp'],
+  KeyW: ['jump', 'menuUp'],
+  Space: ['jump', 'confirm'],
+  Enter: 'confirm',
   ShiftLeft: 'run',
   ShiftRight: 'run',
   KeyJ: 'run',
+  Escape: ['pause', 'back'],
+  KeyP: 'pause',
 });
 
 /**
  * Keys whose default browser behaviour would disrupt play (scrolling the page,
  * activating a focused element) while the game is running.
+ *
+ * Escape is deliberately excluded: swallowing it would trap the player in
+ * fullscreen, and nothing it does by default interferes with the game.
  * @type {Set<string>}
  */
-const SWALLOWED_KEYS = new Set(Object.keys(KEY_BINDINGS));
+const SWALLOWED_KEYS = new Set(
+  Object.keys(KEY_BINDINGS).filter((code) => code !== 'Escape'),
+);
+
+/**
+ * Normalise a binding to a list, so the handlers have one shape to deal with.
+ *
+ * @param {string|string[]|undefined} binding
+ * @returns {string[]}
+ */
+function actionsFor(binding) {
+  if (binding === undefined) return [];
+  return Array.isArray(binding) ? binding : [binding];
+}
 
 export class Input {
   constructor() {
@@ -144,11 +170,10 @@ export class Input {
   _onKeyDown(event) {
     if (SWALLOWED_KEYS.has(event.code)) event.preventDefault();
 
-    const action = KEY_BINDINGS[event.code];
     // `event.repeat` is the OS key-repeat stream; press() already guards, but
     // returning early keeps the intent explicit.
-    if (!action || event.repeat) return;
-    this.press(action);
+    if (event.repeat) return;
+    for (const action of actionsFor(KEY_BINDINGS[event.code])) this.press(action);
   }
 
   /**
@@ -156,8 +181,6 @@ export class Input {
    * @private
    */
   _onKeyUp(event) {
-    const action = KEY_BINDINGS[event.code];
-    if (!action) return;
-    this.release(action);
+    for (const action of actionsFor(KEY_BINDINGS[event.code])) this.release(action);
   }
 }
