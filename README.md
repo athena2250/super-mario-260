@@ -73,6 +73,8 @@ src/
     Camera.js          Follow camera: dead zone, look-ahead, damping, clamping
     GameState.js       Lives, score, shards, beacons and the level's phase
     LevelTimer.js      The five-minute countdown, and how urgent it is
+    Progress.js        Which levels are finished and unlocked, and the best runs
+    Storage.js         A localStorage wrapper that cannot throw
     AppState.js        Which screen the game is on, and the fade between them
   input/
     Input.js           Action state (keyboard bindings, press/release API)
@@ -117,7 +119,12 @@ src/
     screens/
       TitleScreen.js     Welcome screen: title, subtitle, Play, How To Play
       HowToPlayScreen.js Controls and objectives
-      TimeUpScreen.js    Drawn over the frozen level when the clock runs out
+      LevelSelectScreen.js  The three levels, locked ones included
+      OutcomeScreen.js   Shared panel for a level that ended badly
+      TimeUpScreen.js    The clock ran out
+      GameOverScreen.js  The last lantern went out
+      LevelCompleteScreen.js  "Treasure Found!" and the level's results
+      FinalVictoryScreen.js   "Adventure Complete!" and the campaign totals
   levels/
     levels.js          The campaign list: order, names, difficulty
     level01.js         "The Shallow Hollow" - gentle
@@ -223,6 +230,53 @@ Land on any of them to defeat it. Touch one any other way and it costs a life.
 Terrain deaths return Pip to the last beacon he lit; creature contact only
 knocks him back, because on a level this long, sending the player backwards for
 one mistimed jump would be punishing out of all proportion.
+
+## Finishing a level
+
+Three beacons, then the treasure. The chest opens onto a results screen that
+counts its rows in one at a time and tallies the score up rather than printing
+it — a results screen that animates reads as a reward, one that does not reads
+as a dialog box. Its buttons stay inert until the tally lands, so the payoff is
+never skipped past by a jump the player was still holding when the chest opened.
+
+The level is banked the moment the chest finishes opening, not when a button is
+pressed, so walking away at the results screen still keeps what was earned.
+Finishing a level unlocks the next one; finishing the third closes the adventure
+with the totals from all three. A replay only overwrites a previous result if it
+scores higher — the game rewards finding things, and a fast run that skipped
+half the level should not erase a thorough one.
+
+Once the score has finished counting, the game **carries on to the next level by
+itself** after five seconds, counting down on the button it is about to press.
+Any input at all cancels it — arrowing onto another button is enough — because a
+player reaching for the controls is a player who wants to choose. The adventure
+should flow without having to be asked, but never take the choice away.
+
+## Saving
+
+Progress is written to `localStorage` after every completed level, and read back
+at boot. Everything about that is treated as hostile:
+
+- The API may not exist, or may throw merely on being touched — Safari's
+  private mode and a page opened from `file://` both do this — so it is probed
+  with a real write before being trusted.
+- The stored text is user-editable, so it may be truncated, hand-edited, or left
+  over from a build with a different number of levels. Anything that does not
+  survive validation is dropped, and stray numbers are scrubbed rather than
+  believed.
+
+None of it is allowed to stop someone playing: a lost save is a disappointment,
+a black screen is a broken game. With no storage at all the game runs exactly as
+before and simply forgets between sessions.
+
+Level select shows all three levels including the locked ones — a list that
+grows as you play tells you nothing about what is ahead, while a list of three
+with two dark tells you exactly how much Hollow is left. Locked rows can be
+highlighted and read, and refuse to open.
+
+A level can also end badly, in two ways — the clock running out and the last
+lantern going out — and those are one screen with different words, drawn over
+the frozen level so the player can see exactly where it happened.
 
 ## The clock
 

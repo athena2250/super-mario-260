@@ -28,8 +28,15 @@ const BREATHE = 2;
  * @property {string} label
  * @property {boolean} [disabled] - Selectable, but cannot be activated. Used
  *   for locked levels, which must stay visible to be worth unlocking.
- * @property {string} [note] - Small text drawn to the right of the label.
+ * @property {string} [note] - Small text drawn outside, to the right.
+ * @property {string} [detail] - Small text drawn inside, right-aligned. Used
+ *   for a level's status and best score.
  * @property {string} [color] - Overrides the label colour.
+ * @property {number} [width] - Overrides the column width for this item alone.
+ * @property {boolean} [wide] - Left-align the label instead of centring it,
+ *   for rows that carry a `detail` on the other side.
+ * @property {number} [gapBefore] - Extra pixels above this item, to separate a
+ *   group of choices from the way out of them.
  */
 
 export class Menu {
@@ -89,17 +96,29 @@ export class Menu {
    * @returns {{x: number, y: number, width: number, height: number}}
    */
   boundsOf(index) {
+    const width = this.items[index]?.width ?? this.width;
+
+    // Walked rather than multiplied, because an item may ask for extra space
+    // above it and everything below has to move down with it.
+    let y = this.y;
+    for (let i = 0; i < index; i++) {
+      y += (this.items[i]?.gapBefore ?? 0) + UI.buttonHeight + UI.buttonGap;
+    }
+    y += this.items[index]?.gapBefore ?? 0;
+
     return {
-      x: Math.round(this.centerX - this.width / 2),
-      y: this.y + index * (UI.buttonHeight + UI.buttonGap),
-      width: this.width,
+      x: Math.round(this.centerX - width / 2),
+      y,
+      width,
       height: UI.buttonHeight,
     };
   }
 
   /** Total height of the column, so screens can lay out around it. @returns {number} */
   get height() {
-    return this.items.length * (UI.buttonHeight + UI.buttonGap) - UI.buttonGap;
+    if (this.items.length === 0) return 0;
+    const last = this.boundsOf(this.items.length - 1);
+    return last.y + last.height - this.y;
   }
 
   /**
@@ -214,11 +233,27 @@ export class Menu {
       : (item.color ?? (selected ? PALETTE.lanternCore : PALETTE.hazeGlow));
 
     const textY = y + Math.round((height - 5 * LABEL_SCALE) / 2);
-    drawTextShadowed(ctx, item.label, this.centerX, textY, {
-      color: labelColor,
-      align: 'center',
-      scale: LABEL_SCALE,
-    });
+
+    if (item.wide) {
+      // A row rather than a button: label on the left, status on the right.
+      drawTextShadowed(ctx, item.label, x + 8, textY, {
+        color: labelColor,
+        scale: LABEL_SCALE,
+      });
+    } else {
+      drawTextShadowed(ctx, item.label, this.centerX, textY, {
+        color: labelColor,
+        align: 'center',
+        scale: LABEL_SCALE,
+      });
+    }
+
+    if (item.detail) {
+      drawText(ctx, item.detail, x + width - 8, y + Math.round((height - 5) / 2), {
+        color: item.disabled ? PALETTE.runeDormant : PALETTE.runeVerdant,
+        align: 'right',
+      });
+    }
 
     if (item.note) {
       drawText(ctx, item.note, x + width + 8, y + 8, {

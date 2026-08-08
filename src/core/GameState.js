@@ -67,8 +67,8 @@ export class GameState {
     /** Beacons the level contains, for the "1 / 3" readout. @type {number} */
     this.checkpointTotal = 0;
 
-    /** Seconds remaining on the game-over pause. @type {number} @private */
-    this._restartTimer = 0;
+    /** Seconds left of the beat between a final death and the screen. @private */
+    this._endingTimer = 0;
 
     this.timer.restart();
   }
@@ -92,7 +92,7 @@ export class GameState {
    * @returns {boolean} True on the single step the countdown runs out.
    */
   update(dt) {
-    if (this.phase === PHASE.GAME_OVER) this._restartTimer -= dt;
+    if (this.phase === PHASE.GAME_OVER) this._endingTimer -= dt;
     if (this.phase !== PHASE.PLAYING) {
       this.timer.stop();
       return false;
@@ -152,13 +152,17 @@ export class GameState {
     if (this.lives > 0) return false;
 
     this.phase = PHASE.GAME_OVER;
-    this._restartTimer = 2.2;
+    this._endingTimer = 1.6;
     return true;
   }
 
-  /** True once the game-over pause has run its course. @returns {boolean} */
-  get readyToRestart() {
-    return this.phase === PHASE.GAME_OVER && this._restartTimer <= 0;
+  /**
+   * True once the beat after a final death has passed. The screen waits for it
+   * so the death itself is seen and heard before the game talks about it.
+   * @returns {boolean}
+   */
+  get endingSettled() {
+    return this.phase === PHASE.GAME_OVER && this._endingTimer <= 0;
   }
 
   /** The chest has been touched. */

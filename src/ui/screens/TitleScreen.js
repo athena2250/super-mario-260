@@ -27,9 +27,10 @@ export class TitleScreen {
     this.menu = new Menu(
       [
         { id: 'play', label: 'PLAY' },
+        { id: 'levelSelect', label: 'LEVEL SELECT' },
         { id: 'howToPlay', label: 'HOW TO PLAY' },
       ],
-      { y: 112 },
+      { y: 104 },
     );
 
     /** Seconds since the screen opened. @type {number} @private */

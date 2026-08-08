@@ -23,11 +23,15 @@ import { Spores } from './world/Spores.js';
 import { World } from './world/World.js';
 import { Player } from './entities/Player.js';
 import { Hud } from './ui/Hud.js';
-import { VictoryScreen } from './ui/VictoryScreen.js';
 import { MenuBackdrop } from './ui/MenuBackdrop.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { HowToPlayScreen } from './ui/screens/HowToPlayScreen.js';
+import { LevelSelectScreen } from './ui/screens/LevelSelectScreen.js';
 import { TimeUpScreen } from './ui/screens/TimeUpScreen.js';
+import { GameOverScreen } from './ui/screens/GameOverScreen.js';
+import { LevelCompleteScreen } from './ui/screens/LevelCompleteScreen.js';
+import { FinalVictoryScreen } from './ui/screens/FinalVictoryScreen.js';
+import { Progress } from './core/Progress.js';
 import { renderDebugOverlay } from './ui/DebugOverlay.js';
 import { LEVELS, LEVEL_COUNT, clampLevelIndex } from './levels/levels.js';
 
@@ -42,6 +46,18 @@ function spawnPositionFor(map) {
   const x = map.spawn.col * TILE_SIZE + (TILE_SIZE - PLAYER.width) / 2;
   const y = (map.spawn.row + 1) * TILE_SIZE - PLAYER.height;
   return [Math.round(x), Math.round(y)];
+}
+
+/**
+ * Seconds as `m:ss`. Used for the campaign total, which is the only duration
+ * not already formatted by a timer.
+ *
+ * @param {number} seconds
+ * @returns {string}
+ */
+function formatDuration(seconds) {
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
 export class Game {
@@ -81,17 +97,21 @@ export class Game {
     this.screens = {
       [STATE.MAIN_MENU]: new TitleScreen(),
       [STATE.HOW_TO_PLAY]: new HowToPlayScreen(),
+      [STATE.LEVEL_SELECT]: new LevelSelectScreen(),
       [STATE.TIME_UP]: new TimeUpScreen(),
+      [STATE.GAME_OVER]: new GameOverScreen(),
+      [STATE.LEVEL_COMPLETE]: new LevelCompleteScreen(),
+      [STATE.FINAL_VICTORY]: new FinalVictoryScreen(),
     };
+
+    /** What the player has finished and unlocked. @type {Progress} */
+    this.progress = new Progress(LEVEL_COUNT);
 
     /** @type {GameState} */
     this.state = new GameState();
 
     /** @type {Hud} */
     this.hud = new Hud();
-
-    /** @type {VictoryScreen} */
-    this.victory = new VictoryScreen();
 
     /** Ambient background particle field. @type {Spores} */
     this.spores = new Spores();
@@ -105,9 +125,6 @@ export class Game {
     this.player = null;
     /** @type {Camera} */
     this.camera = null;
-
-    /** Time bonus awarded on completion, held for the results screen. @private */
-    this._timeBonus = 0;
 
     /** Last whole second announced by {@link _soundTheClock}. @type {number|null} @private */
     this._lastSecond = null;
@@ -157,8 +174,6 @@ export class Game {
     this.state.shardTotal = this.world.shardTotal;
     this.state.checkpointTotal = this.world.checkpointTotal;
     this.hud.reset();
-    this.victory.reset();
-    this._timeBonus = 0;
     this._lastSecond = null;
   }
 
@@ -226,7 +241,6 @@ export class Game {
   _updateLevel(dt) {
     const ranOut = this.state.update(dt);
     this.hud.update(dt);
-    this.victory.update(dt);
 
     if (ranOut) {
       this._onTimeUp();
@@ -239,14 +253,10 @@ export class Game {
       this._checkFatalTerrain();
       this._advanceVictory();
       this.camera.update(dt, this.player);
-    } else if (this.state.phase === PHASE.GAME_OVER && this.state.readyToRestart) {
-      this._restartLevel();
-    } else if (this.state.phase === PHASE.VICTORY) {
-      // The world is frozen behind the results screen, but the camera keeps
-      // easing so the final frame settles rather than stopping dead.
-      this.camera.update(dt, this.player);
-      if (this.victory.complete && this.input.justPressed('jump')) this._advanceLevel();
+      return;
     }
+
+    if (this.state.endingSettled) this._onGameOver();
   }
 
   /**
@@ -257,6 +267,15 @@ export class Game {
   _onTimeUp() {
     this.audio.timeUp();
     this._goto(STATE.TIME_UP);
+  }
+
+  /**
+   * The last lantern has gone out. Shown a beat after the death itself, so the
+   * death is seen and heard before the game talks about it.
+   * @private
+   */
+  _onGameOver() {
+    this._goto(STATE.GAME_OVER);
   }
 
   /**
@@ -289,21 +308,27 @@ export class Game {
 
   /**
    * Move on from a finished level.
-   *
-   * Milestone 5 replaces this with a proper results screen; for now it is the
-   * shortest honest thing: on to the next level, or back to the title after the
-   * last one.
-   *
    * @private
    */
   _advanceLevel() {
-    const next = this.levelIndex + 1;
+    this._goto(STATE.PLAYING, () => this.loadLevel(this.levelIndex + 1));
+  }
 
-    if (next >= LEVEL_COUNT) {
-      this._goto(STATE.MAIN_MENU, () => this.loadLevel(0));
-      return;
-    }
-    this._goto(STATE.PLAYING, () => this.loadLevel(next));
+  /**
+   * Close the campaign, with the totals from every level finished.
+   * @private
+   */
+  _finishAdventure() {
+    const totals = this.progress.totals;
+
+    this.screens[STATE.FINAL_VICTORY].present({
+      score: totals.score,
+      time: formatDuration(totals.time),
+      shards: totals.shards,
+      defeated: totals.defeated,
+    });
+    this.audio.treasure();
+    this._goto(STATE.FINAL_VICTORY, () => this.loadLevel(0));
   }
 
   /**
@@ -334,9 +359,22 @@ export class Game {
         this.audio.menuSelect();
         this._goto(STATE.HOW_TO_PLAY);
         break;
+      case 'levelSelect':
+        this.audio.menuSelect();
+        this._openLevelSelect();
+        break;
       case 'retry':
+      case 'replay':
         this.audio.menuSelect();
         this._goto(STATE.PLAYING, () => this.loadLevel(this.levelIndex));
+        break;
+      case 'nextLevel':
+        this.audio.menuSelect();
+        this._advanceLevel();
+        break;
+      case 'finish':
+        this.audio.menuSelect();
+        this._finishAdventure();
         break;
       case 'mainMenu':
         this.audio.menuBack();
@@ -347,8 +385,23 @@ export class Game {
         this._goto(STATE.MAIN_MENU);
         break;
       default:
+        // Level select reports its rows as "level:<index>".
+        if (typeof id === 'string' && id.startsWith('level:')) {
+          this.audio.menuSelect();
+          this._goto(STATE.PLAYING, () => this.loadLevel(Number(id.slice(6))));
+        }
         break;
     }
+  }
+
+  /**
+   * Open the level list, rebuilt from current progress - what is unlocked may
+   * have changed since it was last looked at.
+   * @private
+   */
+  _openLevelSelect() {
+    this.screens[STATE.LEVEL_SELECT].present(LEVELS, this.progress);
+    this._goto(STATE.LEVEL_SELECT);
   }
 
   /**
@@ -420,7 +473,6 @@ export class Game {
     ctx.restore();
 
     this.hud.render(ctx, this.state);
-    this.victory.render(ctx, this.state, this._timeBonus);
   }
 
   /**
@@ -534,31 +586,42 @@ export class Game {
 
   /**
    * Move from the chest animation to the results screen once it finishes.
+   *
+   * The level is banked here rather than on the results screen's buttons, so a
+   * player who walks away at the results still keeps what they earned.
+   *
    * @private
    */
   _advanceVictory() {
     if (this.state.phase !== PHASE.OPENING) return;
     if (!this.world.chest?.opened) return;
 
-    this._timeBonus = this.state.finish();
-    this.victory.show();
-  }
+    const timeBonus = this.state.finish();
+    const isFinalLevel = this.levelIndex === LEVEL_COUNT - 1;
 
-  /**
-   * Full restart: level, creatures, puzzle, run state and Pip.
-   * @private
-   */
-  _restartLevel() {
-    this.world.reset();
-    this.state.reset();
-    this.state.shardTotal = this.world.shardTotal;
-    this.state.checkpointTotal = this.world.checkpointTotal;
-    this.hud.reset();
-    this.victory.reset();
-    this._timeBonus = 0;
+    this.progress.record(this.levelIndex, {
+      time: this.state.time,
+      score: this.state.score,
+      shards: this.state.shards,
+      shardTotal: this.state.shardTotal,
+      defeated: this.state.defeated,
+    });
 
-    this.player.restart();
-    this.camera.snapTo(this.player);
+    this.screens[STATE.LEVEL_COMPLETE].present({
+      levelNumber: this.level.number,
+      levelName: this.level.name,
+      time: this.state.formattedTime,
+      checkpoints: this.state.checkpoints,
+      checkpointTotal: this.state.checkpointTotal,
+      shards: this.state.shards,
+      shardTotal: this.state.shardTotal,
+      defeated: this.state.defeated,
+      timeBonus,
+      score: this.state.score,
+      isFinalLevel,
+    });
+
+    this._goto(STATE.LEVEL_COMPLETE);
   }
 
   /**
