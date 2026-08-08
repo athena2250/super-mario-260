@@ -23,6 +23,7 @@ const CONTROLS = [
   ['JUMP', 'SPACE - W - UP ARROW'],
   ['RUN', 'HOLD SHIFT OR J'],
   ['DROP', 'DOWN ARROW ON A THIN PLATFORM'],
+  ['PAUSE', 'ESC OR P - THE CLOCK STOPS TOO'],
 ];
 
 /** What winning a level takes, in the order the player will meet it. */
@@ -76,7 +77,7 @@ export class HowToPlayScreen {
       scale: 3,
     });
 
-    this._renderPanel(ctx, 44, 74);
+    this._renderPanel(ctx, 44, 86);
     drawText(ctx, 'CONTROLS', PANEL_X + 8, 50, { color: PALETTE.lantern, scale: 2 });
 
     CONTROLS.forEach(([label, description], index) => {
@@ -85,11 +86,11 @@ export class HowToPlayScreen {
       drawText(ctx, description, PANEL_X + 58, y, { color: PALETTE.lanternCore });
     });
 
-    this._renderPanel(ctx, 136, 82);
-    drawText(ctx, 'YOUR QUEST', PANEL_X + 8, 142, { color: PALETTE.lantern, scale: 2 });
+    this._renderPanel(ctx, 140, 78);
+    drawText(ctx, 'YOUR QUEST', PANEL_X + 8, 146, { color: PALETTE.lantern, scale: 2 });
 
     OBJECTIVES.forEach((line, index) => {
-      const y = 160 + index * 11;
+      const y = 162 + index * 11;
       this._renderBullet(ctx, PANEL_X + 12, y + 1, index);
       drawText(ctx, line, PANEL_X + 20, y, { color: PALETTE.lanternCore });
     });

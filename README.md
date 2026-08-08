@@ -45,6 +45,7 @@ stalled tab from triggering a catch-up death spiral — deltas are clamped to
 | Run | `Shift` / `J` | On-screen ⏩ |
 | Drop through platform | `↓` / `S` | — |
 | Jump / stomp | `Space` / `W` / `↑` | On-screen ▲ |
+| Pause | `Esc` / `P` | On-screen ⏸ |
 
 Jump height is analogue — tap for a hop (~1.5 tiles), hold for a full leap
 (~3.1 tiles up, ~5 tiles across at a run). Jumps are forgiving by design: a
@@ -113,13 +114,14 @@ src/
     PixelText.js       A 3x5 bitmap font, so text matches the art
     Menu.js            Vertical button list: keyboard, pointer, animation
     MenuBackdrop.js    Parallax cavern scenery shared by every menu
-    Hud.js             Lives, shards, score, clock and banners
-    VictoryScreen.js   The "Treasure Found!" results screen
+    Hud.js             Lives, shards, beacons, score, clock and banners
+    LevelIntro.js      The card that names a level as it begins
     DebugOverlay.js    Developer readout
     screens/
       TitleScreen.js     Welcome screen: title, subtitle, Play, How To Play
       HowToPlayScreen.js Controls and objectives
       LevelSelectScreen.js  The three levels, locked ones included
+      PauseScreen.js     Resume, restart, or leave
       OutcomeScreen.js   Shared panel for a level that ended badly
       TimeUpScreen.js    The clock ran out
       GameOverScreen.js  The last lantern went out
@@ -172,6 +174,28 @@ three tiles apart because Pip's feet reach 49 px, and the pits are graded — tw
 tiles (clearable at a walk) before the run button is taught, three tiles
 (requires a run) after. Level 1 is 72 × 24 tiles, about two and a half screens
 wide and one and a half tall.
+
+## Feel
+
+Impact is carried by three things that cost the simulation nothing:
+
+**Screen shake** is offset applied in `Camera.applyTo`, never to `camera.x` — so
+nothing in the simulation can be affected by it, and the culling rectangle is
+widened by the shake ceiling so a knock cannot expose an unculled strip at the
+screen edge. It is capped at four pixels, in whole pixels only: at this
+resolution four is already a hard knock, and a fractional offset would resample
+every sprite. Repeat knocks take the strongest rather than summing.
+
+**Dust and sound on Pip's own movement.** `justJumped` and `justLanded` were
+being computed and thrown away — a jump with no sound and a landing with no dust
+reads as weightless however good the physics underneath it is. Heavy landings
+use the same threshold the squash animation already uses, rather than a second
+one that could disagree with it.
+
+**Readouts that move when they change.** A number that changes without moving is
+a number nobody notices changing, so the score, the shard count and the newest
+beacon pip all flare briefly, and the HUD sits on a band of shade so it stays
+readable over mossy stone and open sky alike.
 
 ## Camera
 
@@ -246,11 +270,27 @@ with the totals from all three. A replay only overwrites a previous result if it
 scores higher — the game rewards finding things, and a fast run that skipped
 half the level should not erase a thorough one.
 
-Once the score has finished counting, the game **carries on to the next level by
-itself** after five seconds, counting down on the button it is about to press.
-Any input at all cancels it — arrowing onto another button is enough — because a
-player reaching for the controls is a player who wants to choose. The adventure
-should flow without having to be asked, but never take the choice away.
+Once the score has finished counting the screen **asks** — `CONTINUE TO LEVEL 2?`
+— and then waits, for as long as it takes. Nothing happens on a timer: the
+player says when they are ready, and the answer names the level being offered so
+the choice can be made without reading all three buttons.
+
+## Pausing
+
+`Esc` or `P`, or the ⏸ button that sits in the dead space between the two thumbs
+on the touch pad — where it cannot be hit by accident during play but is
+reachable without looking.
+
+The pause screen arrives **without a fade**, because a black wipe on the way in
+reads as the game having lost its place rather than as the world holding its
+breath. While it is up, the level is not stepped at all: that is why the
+countdown stops dead, why pausing cannot be used to buy time, and why resuming
+continues from the exact fraction of a second it stopped on. The held movement
+keys are released on the way in, so a player who pauses mid-sprint does not come
+back to Pip running into a wall.
+
+The only thing that moves on that screen is the pause glyph, breathing — a
+completely still screen over a completely still level reads as a hang.
 
 ## Saving
 
@@ -324,7 +364,7 @@ nothing.
 - [x] 8. Collectibles
 - [x] 9. UI
 - [x] 10. Sound
-- [ ] 11. Multiple levels
-- [ ] 12. Polish
+- [x] 11. Multiple levels
+- [x] 12. Polish
 - [ ] 13. Performance optimization
 - [ ] 14. Final bug fixing

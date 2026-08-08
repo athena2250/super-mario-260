@@ -55,6 +55,25 @@ const DAMPING = Object.freeze({
 });
 
 /**
+ * Screen shake.
+ *
+ * Presentation only: it offsets what is *drawn*, never where the camera thinks
+ * it is, so nothing in the simulation can be affected by it. Amplitudes are
+ * deliberately tiny - at this resolution four pixels is already a hard knock,
+ * and anything more turns a pixel-art level into mush.
+ */
+const SHAKE = Object.freeze({
+  /** Seconds one shake lasts. Short: an impact, not an earthquake. */
+  duration: 0.28,
+  /** Ceiling on amplitude, in pixels, whatever a caller asks for. */
+  maxPower: 4,
+  /** Oscillation rates, deliberately incommensurable so it never looks like a
+   *  clean sine wave. */
+  rateX: 58,
+  rateY: 41,
+});
+
+/**
  * Frame-rate independent exponential damping.
  *
  * The naive `current += (target - current) * rate` form is dt-dependent and
@@ -92,6 +111,18 @@ export class Camera {
     /** Current smoothed look-ahead offset. @type {number} @private */
     this._look = 0;
 
+    /** Drawing offset from the current shake, in whole pixels. @type {number} */
+    this.shakeX = 0;
+    /** @type {number} */
+    this.shakeY = 0;
+
+    /** @type {number} @private */
+    this._shakePower = 0;
+    /** @type {number} @private */
+    this._shakeTime = 0;
+    /** Runs while shaking, so successive shakes do not restart the waveform. */
+    this._shakeAge = 0;
+
     /**
      * Reused rectangle handed to renderers for culling. Mutated in place rather
      * than reallocated, since it is read every frame.
@@ -109,9 +140,27 @@ export class Camera {
    * @returns {{x: number, y: number, width: number, height: number}}
    */
   get view() {
-    this._view.x = Math.round(this.x);
-    this._view.y = Math.round(this.y);
+    // Widened by the shake ceiling, so a knock can never expose an unculled
+    // strip at the edge of the screen.
+    this._view.x = Math.round(this.x) - SHAKE.maxPower;
+    this._view.y = Math.round(this.y) - SHAKE.maxPower;
+    this._view.width = this.width + SHAKE.maxPower * 2;
+    this._view.height = this.height + SHAKE.maxPower * 2;
     return this._view;
+  }
+
+  /**
+   * Knock the view about for a moment.
+   *
+   * Repeat calls take the strongest rather than adding up, so a stomp landing
+   * in the same step as a vault opening reads as one impact instead of
+   * doubling into something painful.
+   *
+   * @param {number} power - Amplitude in pixels; clamped.
+   */
+  shake(power) {
+    this._shakePower = Math.min(SHAKE.maxPower, Math.max(this._shakePower, power));
+    this._shakeTime = SHAKE.duration;
   }
 
   /**
@@ -136,6 +185,29 @@ export class Camera {
     this.y = damp(this.y, desiredY, verticalRate, dt);
 
     this._clampToLevel();
+    this._updateShake(dt);
+  }
+
+  /**
+   * @param {number} dt
+   * @private
+   */
+  _updateShake(dt) {
+    if (this._shakeTime <= 0) {
+      this.shakeX = 0;
+      this.shakeY = 0;
+      this._shakePower = 0;
+      return;
+    }
+
+    this._shakeTime -= dt;
+    this._shakeAge += dt;
+
+    // Linear decay to nothing. Whole pixels only: a fractional offset would
+    // resample every sprite, which is exactly what the renderer avoids.
+    const amplitude = this._shakePower * Math.max(0, this._shakeTime / SHAKE.duration);
+    this.shakeX = Math.round(Math.sin(this._shakeAge * SHAKE.rateX) * amplitude);
+    this.shakeY = Math.round(Math.cos(this._shakeAge * SHAKE.rateY) * amplitude * 0.6);
   }
 
   /**
@@ -149,6 +221,13 @@ export class Camera {
     this.x = target.centerX + this._look - this.width / 2;
     this.y = target.centerY - this.height / 2;
     this._clampToLevel();
+
+    // A shake left over from whatever killed him must not follow Pip to where
+    // he respawns.
+    this._shakeTime = 0;
+    this._shakePower = 0;
+    this.shakeX = 0;
+    this.shakeY = 0;
   }
 
   /**
@@ -162,7 +241,7 @@ export class Camera {
     // Rounding is what keeps the tile grid pixel-aligned. A fractional
     // translate would let the canvas resample every sprite, undoing the crisp
     // upscale the whole renderer is built around.
-    ctx.translate(-Math.round(this.x), -Math.round(this.y));
+    ctx.translate(-Math.round(this.x) + this.shakeX, -Math.round(this.y) + this.shakeY);
   }
 
   /**

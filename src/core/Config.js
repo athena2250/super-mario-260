@@ -257,8 +257,9 @@ export const UI = Object.freeze({
   fadeOut: 0.22,
   /** Seconds to fade up on the screen arrived at. */
   fadeIn: 0.3,
-  /** Colour of the transition curtain. */
+  /** Colour of the transition curtain, and of the light that rides its edge. */
   curtain: '#0d0b1a',
+  curtainEdge: '#ffc45e',
 
   /** Menu button geometry, in logical pixels. */
   buttonWidth: 132,

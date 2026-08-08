@@ -23,10 +23,12 @@ import { Spores } from './world/Spores.js';
 import { World } from './world/World.js';
 import { Player } from './entities/Player.js';
 import { Hud } from './ui/Hud.js';
+import { LevelIntro } from './ui/LevelIntro.js';
 import { MenuBackdrop } from './ui/MenuBackdrop.js';
 import { TitleScreen } from './ui/screens/TitleScreen.js';
 import { HowToPlayScreen } from './ui/screens/HowToPlayScreen.js';
 import { LevelSelectScreen } from './ui/screens/LevelSelectScreen.js';
+import { PauseScreen } from './ui/screens/PauseScreen.js';
 import { TimeUpScreen } from './ui/screens/TimeUpScreen.js';
 import { GameOverScreen } from './ui/screens/GameOverScreen.js';
 import { LevelCompleteScreen } from './ui/screens/LevelCompleteScreen.js';
@@ -98,6 +100,7 @@ export class Game {
       [STATE.MAIN_MENU]: new TitleScreen(),
       [STATE.HOW_TO_PLAY]: new HowToPlayScreen(),
       [STATE.LEVEL_SELECT]: new LevelSelectScreen(),
+      [STATE.PAUSED]: new PauseScreen(),
       [STATE.TIME_UP]: new TimeUpScreen(),
       [STATE.GAME_OVER]: new GameOverScreen(),
       [STATE.LEVEL_COMPLETE]: new LevelCompleteScreen(),
@@ -112,6 +115,9 @@ export class Game {
 
     /** @type {Hud} */
     this.hud = new Hud();
+
+    /** The card that names a level as it begins. @type {LevelIntro} */
+    this.levelIntro = new LevelIntro();
 
     /** Ambient background particle field. @type {Spores} */
     this.spores = new Spores();
@@ -174,6 +180,7 @@ export class Game {
     this.state.shardTotal = this.world.shardTotal;
     this.state.checkpointTotal = this.world.checkpointTotal;
     this.hud.reset();
+    this.levelIntro.show(this.level);
     this._lastSecond = null;
   }
 
@@ -239,8 +246,16 @@ export class Game {
    * @private
    */
   _updateLevel(dt) {
+    // Tested before anything else advances, so the frame the player pauses on
+    // is the frame they see - no extra step of physics slips through.
+    if (this.state.phase === PHASE.PLAYING && this.input.justPressed('pause')) {
+      this._pause();
+      return;
+    }
+
     const ranOut = this.state.update(dt);
     this.hud.update(dt);
+    this.levelIntro.update(dt);
 
     if (ranOut) {
       this._onTimeUp();
@@ -250,6 +265,7 @@ export class Game {
 
     if (this.state.running) {
       this.world.update(dt, this.input, this.player);
+      this._reportPipMoves();
       this._checkFatalTerrain();
       this._advanceVictory();
       this.camera.update(dt, this.player);
@@ -257,6 +273,72 @@ export class Game {
     }
 
     if (this.state.endingSettled) this._onGameOver();
+  }
+
+  /**
+   * Give Pip's own movement a voice.
+   *
+   * The player produces two events a step can't infer from anywhere else -
+   * leaving the ground and hitting it - and both were being computed and
+   * thrown away. A jump with no sound and a landing with no dust reads as
+   * weightless however good the physics underneath it is.
+   *
+   * @private
+   */
+  _reportPipMoves() {
+    if (this.player.justJumped) this.audio.jump();
+    if (!this.player.justLanded) return;
+
+    // Only a landing with real force behind it is worth marking; the animation
+    // has already made that judgement, so use the same threshold rather than a
+    // second one that could disagree with it.
+    const heavy = this.player.animation.squashing;
+
+    this.world.particles.emit({
+      x: this.player.centerX,
+      y: this.player.bottom,
+      count: heavy ? 8 : 4,
+      color: PALETTE.stoneLit,
+      speed: heavy ? 52 : 30,
+      gravity: 130,
+      life: 0.3,
+    });
+
+    if (!heavy) return;
+    this.audio.land();
+    this.camera.shake(1.5);
+  }
+
+  /**
+   * Hold the level where it is.
+   *
+   * Instant rather than faded: a pause should feel like the world holding its
+   * breath, and a black wipe would read as the game having lost its place. The
+   * held movement keys are released, so a player who tabs away mid-run does not
+   * come back to Pip still sprinting into a wall.
+   *
+   * @private
+   */
+  _pause() {
+    this.audio.menuBack();
+    this.input.releaseAll();
+
+    this.app.go(STATE.PAUSED, {
+      instant: true,
+      onSwap: () => {
+        this.screens[STATE.PAUSED].enter();
+        this.pointer.reset();
+      },
+    });
+  }
+
+  /**
+   * Back into the level, from exactly where it stopped.
+   * @private
+   */
+  _resume() {
+    this.audio.menuSelect();
+    this.app.go(STATE.PLAYING, { instant: true });
   }
 
   /**
@@ -362,6 +444,9 @@ export class Game {
       case 'levelSelect':
         this.audio.menuSelect();
         this._openLevelSelect();
+        break;
+      case 'resume':
+        this._resume();
         break;
       case 'retry':
       case 'replay':
@@ -473,6 +558,7 @@ export class Game {
     ctx.restore();
 
     this.hud.render(ctx, this.state);
+    this.levelIntro.render(ctx);
   }
 
   /**
@@ -491,6 +577,7 @@ export class Game {
       stomp: () => {
         this.state.recordStomp();
         this.audio.stomp();
+        this.camera.shake(2);
       },
       // A creature knocks Pip back but leaves him where he is. Only terrain
       // sends him back to a checkpoint, because only terrain has moved him
@@ -511,10 +598,14 @@ export class Game {
       },
       solved: () => this.hud.showMessage('THE VAULT STIRS', PALETTE.runeAzure, 2.2),
       plank: () => this.audio.plank(),
-      vault: () => this.audio.vault(),
+      vault: () => {
+        this.audio.vault();
+        this.camera.shake(3);
+      },
       chestOpened: () => {
         this.state.beginOpening();
         this.audio.treasure();
+        this.camera.shake(2.5);
       },
     };
   }
@@ -533,6 +624,7 @@ export class Game {
   _lightCheckpoint(checkpoint) {
     this.state.lightCheckpoint();
     this.audio.checkpoint();
+    this.camera.shake(1.5);
 
     const { x, y } = checkpoint.respawnPosition(this.player.width, this.player.height);
     this.player.setRespawnPoint(x, y);
@@ -569,6 +661,7 @@ export class Game {
    */
   _loseLife({ returnToCheckpoint }) {
     const lastLife = this.state.loseLife();
+    this.camera.shake(lastLife ? 4 : 2.5);
 
     if (lastLife) {
       this.audio.gameOver();
@@ -579,8 +672,21 @@ export class Game {
     this.audio.hurt();
 
     if (returnToCheckpoint) {
+      // A burst where he was lost, so a death off screen still reads as a
+      // death rather than as Pip having teleported for no reason.
+      this.world.particles.emit({
+        x: this.player.centerX,
+        y: this.player.centerY,
+        count: 18,
+        color: PALETTE.lantern,
+        speed: 90,
+        gravity: 160,
+        life: 0.6,
+      });
+
       this.player.respawn();
       this.camera.snapTo(this.player);
+      this.hud.flashRespawn();
     }
   }
 

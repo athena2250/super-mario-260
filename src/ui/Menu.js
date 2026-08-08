@@ -23,6 +23,20 @@ const LABEL_SCALE = 2;
 const BREATHE = 2;
 
 /**
+ * Entry animation: each button rises into place, one shortly after the last.
+ *
+ * The stagger is what makes a menu feel assembled rather than switched on. It
+ * is deliberately faster than a player can react, so it is never something to
+ * wait through.
+ */
+const ENTRY_TIME = 0.22;
+const ENTRY_STAGGER = 0.05;
+const ENTRY_RISE = 7;
+
+/** Seconds a button stays lit after being pressed. */
+const FLASH_TIME = 0.16;
+
+/**
  * @typedef {object} MenuItem
  * @property {string} id - Returned when the item is activated.
  * @property {string} label
@@ -66,6 +80,11 @@ export class Menu {
 
     /** Seconds left on the "just moved" nudge. @type {number} @private */
     this._nudge = 0;
+
+    /** Seconds left on the press flash, and which item is lit. @private */
+    this._flash = 0;
+    /** @type {number} @private */
+    this._flashIndex = -1;
   }
 
   /**
@@ -87,6 +106,8 @@ export class Menu {
     this.index = 0;
     this._time = 0;
     this._nudge = 0;
+    this._flash = 0;
+    this._flashIndex = -1;
   }
 
   /**
@@ -132,6 +153,7 @@ export class Menu {
   update(dt, input, pointer) {
     this._time += dt;
     this._nudge = Math.max(0, this._nudge - dt);
+    this._flash = Math.max(0, this._flash - dt);
 
     if (this.items.length === 0) return null;
 
@@ -150,6 +172,8 @@ export class Menu {
       if (!item) return null;
 
       this.index = index;
+      this._flash = FLASH_TIME;
+      this._flashIndex = index;
       return { action: item.disabled ? 'refused' : 'activate', id: item.id };
     }
 
@@ -209,26 +233,36 @@ export class Menu {
    * @private
    */
   _renderButton(ctx, item, bounds, selected) {
+    const index = this.items.indexOf(item);
+    const entry = this._entryOf(index);
+    if (entry.alpha <= 0) return;
+
     // The selected frame widens slightly and pulses, so which button is live is
     // obvious in peripheral vision without needing colour alone to carry it.
     const pulse = selected ? (Math.sin(this._time * 4) + 1) / 2 : 0;
     const grow = selected ? Math.round(BREATHE * pulse) + (this._nudge > 0 ? 1 : 0) : 0;
 
     const x = bounds.x - grow;
-    const y = bounds.y;
+    const y = bounds.y + entry.rise;
     const width = bounds.width + grow * 2;
     const { height } = bounds;
 
-    ctx.globalAlpha = selected ? 0.75 : 0.45;
-    ctx.fillStyle = PALETTE.stone;
-    ctx.fillRect(x, y, width, height);
-    ctx.globalAlpha = 1;
+    // A pressed button lights up whole, which is the clearest possible answer
+    // to "did that register".
+    const lit = this._flash > 0 && this._flashIndex === index;
 
-    ctx.strokeStyle = selected ? PALETTE.lantern : PALETTE.runeDormant;
+    ctx.globalAlpha = (lit ? 0.9 : selected ? 0.75 : 0.45) * entry.alpha;
+    ctx.fillStyle = lit ? PALETTE.lantern : PALETTE.stone;
+    ctx.fillRect(x, y, width, height);
+    ctx.globalAlpha = entry.alpha;
+
+    ctx.strokeStyle = lit || selected ? PALETTE.lantern : PALETTE.runeDormant;
     ctx.lineWidth = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
 
-    const labelColor = item.disabled
+    const labelColor = lit
+      ? PALETTE.skyTop
+      : item.disabled
       ? PALETTE.runeDormant
       : (item.color ?? (selected ? PALETTE.lanternCore : PALETTE.hazeGlow));
 
@@ -262,6 +296,25 @@ export class Menu {
     }
 
     if (selected) this._renderMarkers(ctx, x, y, width, height, pulse);
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Where an item is in its entrance, one shortly after the last.
+   *
+   * @param {number} index
+   * @returns {{rise: number, alpha: number}}
+   * @private
+   */
+  _entryOf(index) {
+    const elapsed = this._time - index * ENTRY_STAGGER;
+    if (elapsed >= ENTRY_TIME) return { rise: 0, alpha: 1 };
+    if (elapsed <= 0) return { rise: ENTRY_RISE, alpha: 0 };
+
+    const t = elapsed / ENTRY_TIME;
+    // Eased, so buttons decelerate into place instead of stopping dead.
+    const eased = 1 - (1 - t) ** 3;
+    return { rise: Math.round((1 - eased) * ENTRY_RISE), alpha: eased };
   }
 
   /**

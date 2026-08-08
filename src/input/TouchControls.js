@@ -17,6 +17,8 @@ import { GAME_WIDTH, GAME_HEIGHT, PALETTE } from '../core/Config.js';
 
 /** Visual size of the direction buttons, in logical pixels. */
 const SIZE = 32;
+/** The pause button, deliberately smaller: it is not a gameplay control. */
+const PAUSE_SIZE = 18;
 /** Distance from the screen edges. */
 const MARGIN = 9;
 /** Invisible padding added to every hit box - fingers are imprecise. */
@@ -53,6 +55,9 @@ export class TouchControls {
       { action: 'right', x: MARGIN + SIZE + 6, y: bottom - SIZE, w: SIZE, h: SIZE },
       { action: 'run', x: GAME_WIDTH - MARGIN - SIZE * 2 - 12, y: bottom - SIZE, w: SIZE, h: SIZE },
       { action: 'jump', x: GAME_WIDTH - MARGIN - SIZE - 4, y: bottom - SIZE - 4, w: SIZE + 4, h: SIZE + 4 },
+      // Pause sits in the dead space between the two thumbs, where it cannot be
+      // hit by accident during play but is still reachable without looking.
+      { action: 'pause', x: GAME_WIDTH / 2 - PAUSE_SIZE / 2, y: bottom - PAUSE_SIZE, w: PAUSE_SIZE, h: PAUSE_SIZE },
     ];
 
     /** Active pointer id -> the action it is currently holding. @type {Map<number, string>} */
@@ -234,6 +239,10 @@ export class TouchControls {
         ctx.moveTo(cx - 7, cy + 4);
         ctx.lineTo(cx + 7, cy + 4);
         ctx.lineTo(cx, cy - 6);
+        break;
+      case 'pause':
+        ctx.rect(cx - 4, cy - 5, 3, 10);
+        ctx.rect(cx + 1, cy - 5, 3, 10);
         break;
       case 'run':
         // Double chevron, echoing a fast-forward symbol.

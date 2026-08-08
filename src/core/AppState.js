@@ -142,9 +142,25 @@ export class AppState {
   renderCurtain(ctx, width, height) {
     if (this._curtain <= 0) return;
 
-    ctx.globalAlpha = this._curtain;
+    // Smoothstep rather than linear: a linear fade spends most of its time at
+    // the ends, where nothing is happening, and crosses the middle - the part
+    // the eye actually reads - too fast.
+    const t = this._curtain;
+    const eased = t * t * (3 - 2 * t);
+
+    ctx.globalAlpha = eased;
     ctx.fillStyle = UI.curtain;
     ctx.fillRect(0, 0, width, height);
+
+    // A band of lantern light rides the curtain's edge, so a transition reads
+    // as the Hollow closing over the screen rather than as a video cut.
+    if (eased > 0.02 && eased < 0.98) {
+      const edge = Math.round(height * eased);
+      ctx.globalAlpha = (1 - Math.abs(eased - 0.5) * 2) * 0.5;
+      ctx.fillStyle = UI.curtainEdge;
+      ctx.fillRect(0, edge - 2, width, 2);
+    }
+
     ctx.globalAlpha = 1;
   }
 

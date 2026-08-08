@@ -80,6 +80,16 @@ export class Audio {
   }
 
   /**
+   * Hitting the ground hard. Low and dry, with no tone to speak of - it has to
+   * sit under the jump without competing with it, because in a level with a lot
+   * of platforming it is the sound the player hears most often.
+   */
+  land() {
+    this._tone({ type: 'sine', from: 160, to: 70, duration: 0.09, gain: 0.3 });
+    this._noise({ duration: 0.05, gain: 0.1 });
+  }
+
+  /**
    * The stomp: a descending thud with a bright click on top, which is what
    * makes a defeat feel like an impact rather than a beep.
    */

@@ -27,24 +27,13 @@ const TALLY_TIME = 0.8;
 /** Rows shown, in order. */
 const ROW_COUNT = 5;
 
-/**
- * Seconds the results are held before the game carries on by itself.
- *
- * The adventure should flow from level to level without the player having to
- * ask for it, but not so fast that the results are snatched away - so the wait
- * starts only once the score has finished counting, it is shown counting down
- * on the button it will press, and *any* input cancels it. A player who reaches
- * for the controls is a player who wants to choose.
- */
-const AUTO_ADVANCE = 5;
-
 export class LevelCompleteScreen {
   constructor() {
     /** Drawn over the level, which is frozen on its final frame. @type {boolean} */
     this.overWorld = true;
 
     /** @type {Menu} */
-    this.menu = new Menu([], { y: 172 });
+    this.menu = new Menu([], { y: 176 });
 
     /**
      * The finished level's numbers, taken at the moment it was finished.
@@ -55,12 +44,6 @@ export class LevelCompleteScreen {
 
     /** @type {number} @private */
     this._time = 0;
-
-    /** Seconds left before the game moves on by itself. @type {number} @private */
-    this._autoAdvance = AUTO_ADVANCE;
-
-    /** True once the player has taken control, or the advance has fired. @private */
-    this._autoCancelled = false;
 
     /**
      * Sparkle positions, generated once so they do not jitter between frames.
@@ -97,7 +80,7 @@ export class LevelCompleteScreen {
     this.menu.setItems([
       result.isFinalLevel
         ? { id: 'finish', label: 'FINISH', color: PALETTE.runeVerdant }
-        : { id: 'nextLevel', label: 'NEXT LEVEL', color: PALETTE.runeVerdant },
+        : { id: 'nextLevel', label: 'CONTINUE', color: PALETTE.runeVerdant },
       { id: 'replay', label: 'REPLAY LEVEL' },
       { id: 'mainMenu', label: 'MAIN MENU' },
     ]);
@@ -106,19 +89,12 @@ export class LevelCompleteScreen {
   /** Called every time the screen becomes current. */
   enter() {
     this._time = 0;
-    this._autoAdvance = AUTO_ADVANCE;
-    this._autoCancelled = false;
     this.menu.reset();
   }
 
   /** True once every row has appeared and the score has finished counting. */
   get settled() {
     return this._time > ROW_DELAY * ROW_COUNT + TALLY_TIME;
-  }
-
-  /** The id of the button the auto-advance will press. @returns {string} */
-  get onwardId() {
-    return this._result?.isFinalLevel ? 'finish' : 'nextLevel';
   }
 
   /**
@@ -129,22 +105,13 @@ export class LevelCompleteScreen {
    */
   update(dt, input, pointer) {
     this._time += dt;
+
+    // Nothing happens until the results have finished arriving: the reward is
+    // not skippable, and the game never moves on by itself - the player is
+    // asked, and the game waits for as long as it takes them to answer.
     if (!this.settled) return null;
 
-    const chosen = this.menu.update(dt, input, pointer);
-
-    // Any deliberate input hands control back to the player - including one
-    // that did nothing, like arrowing onto a button without confirming.
-    if (chosen || pointer.moved || input.justPressed('back')) this._autoCancelled = true;
-    if (chosen) return chosen;
-
-    if (this._autoCancelled) return null;
-
-    this._autoAdvance -= dt;
-    if (this._autoAdvance > 0) return null;
-
-    this._autoCancelled = true;
-    return { action: 'activate', id: this.onwardId };
+    return this.menu.update(dt, input, pointer);
   }
 
   /**
@@ -183,20 +150,28 @@ export class LevelCompleteScreen {
 
     if (!this.settled) return;
 
-    this._showCountdown();
+    this._renderPrompt(ctx, centerX);
     this.menu.render(ctx);
   }
 
   /**
-   * Put the remaining wait on the button it is going to press, so the player
-   * can see it coming and knows what stopped when they touch the controls.
+   * The question the buttons answer. Naming the level being offered is what
+   * turns three buttons into a decision the player can make without reading all
+   * three of them.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} centerX
    * @private
    */
-  _showCountdown() {
-    const onward = this.menu.items[0];
-    if (!onward) return;
+  _renderPrompt(ctx, centerX) {
+    const prompt = this._result.isFinalLevel
+      ? 'THAT WAS THE LAST HOLLOW'
+      : `CONTINUE TO LEVEL ${this._result.levelNumber + 1}?`;
 
-    onward.detail = this._autoCancelled ? undefined : String(Math.ceil(this._autoAdvance));
+    drawText(ctx, prompt, centerX, 166, {
+      color: PALETTE.lantern,
+      align: 'center',
+    });
   }
 
   /**

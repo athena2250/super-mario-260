@@ -210,17 +210,24 @@ export class Checkpoint extends Entity {
     const progress = 1 - this.igniting;
     const centerX = x + WIDTH / 2;
     const centerY = y + 4;
-    const radius = 4 + progress * 26;
 
-    ctx.globalAlpha = (1 - progress) * 0.8;
-    ctx.strokeStyle = PALETTE.lanternCore;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(
-      Math.round(centerX - radius) + 0.5,
-      Math.round(centerY - radius) + 0.5,
-      Math.round(radius * 2),
-      Math.round(radius * 2),
-    );
+    // Two rings, the second half a beat behind the first. One ring is an
+    // effect; two is a *catching*, which is what a beacon actually does.
+    for (const delay of [0, 0.25]) {
+      const t = (progress - delay) / (1 - delay);
+      if (t <= 0 || t >= 1) continue;
+
+      const radius = 4 + t * 26;
+      ctx.globalAlpha = (1 - t) * (delay === 0 ? 0.8 : 0.45);
+      ctx.strokeStyle = delay === 0 ? PALETTE.lanternCore : PALETTE.lantern;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(
+        Math.round(centerX - radius) + 0.5,
+        Math.round(centerY - radius) + 0.5,
+        Math.round(radius * 2),
+        Math.round(radius * 2),
+      );
+    }
     ctx.globalAlpha = 1;
   }
 }
