@@ -15,7 +15,7 @@
  */
 
 import { TILE_SIZE } from '../core/Config.js';
-import { HAZARD_INSET } from '../world/tiles.js';
+import { HAZARD_INSET, isSpring } from '../world/tiles.js';
 
 /**
  * Slack allowed when deciding whether a body was above a one-way platform.
@@ -32,6 +32,7 @@ const PLATFORM_TOLERANCE = 1;
  * @property {boolean} ceiling - Head hit something this step.
  * @property {boolean} wall - Side hit something this step.
  * @property {boolean} hazard - Overlapping a hazard tile.
+ * @property {boolean} spring - Landed on a glowspring this step.
  */
 
 /**
@@ -63,6 +64,7 @@ export function moveAndCollide(body, dt, map, dropThrough = false) {
   contact.ceiling = false;
   contact.wall = false;
   contact.hazard = false;
+  contact.spring = false;
 
   // Captured before any movement: one-way platforms need to know whether the
   // body was already below them.
@@ -152,6 +154,9 @@ function resolveVertical(body, map, contact, previousBottom, dropThrough) {
       if (direction > 0) {
         body.y = row * TILE_SIZE - body.height;
         contact.grounded = true;
+        // Reported rather than acted on: collision resolves geometry, and what
+        // a landing *means* belongs to the body that landed.
+        contact.spring = isSpring(map.tileAt(col, row));
       } else {
         body.y = (row + 1) * TILE_SIZE;
         contact.ceiling = true;

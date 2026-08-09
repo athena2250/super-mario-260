@@ -41,9 +41,15 @@ export class Entity {
      * `moveAndCollide`, rather than a fresh object per step: a body's contact
      * is read straight after its move, and one object per body per step was the
      * largest single source of garbage in the simulation.
-     * @type {{grounded: boolean, ceiling: boolean, wall: boolean, hazard: boolean}}
+     * @type {{grounded: boolean, ceiling: boolean, wall: boolean, hazard: boolean, spring: boolean}}
      */
-    this.contact = { grounded: false, ceiling: false, wall: false, hazard: false };
+    this.contact = {
+      grounded: false,
+      ceiling: false,
+      wall: false,
+      hazard: false,
+      spring: false,
+    };
 
     /**
      * Scratch for {@link getRenderPosition}. Reused so that drawing allocates

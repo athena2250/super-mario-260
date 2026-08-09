@@ -212,6 +212,10 @@ export class World {
    * @private
    */
   _updatePlatforms(dt, player) {
+    // Phase decks all turn over on the same step, so the beat is announced once
+    // rather than once per deck - thirty platforms would otherwise chord.
+    let phaseFlipped = false;
+
     for (const platform of this.platforms) {
       platform.update(dt);
 
@@ -221,7 +225,31 @@ export class World {
         player.x += platform.deltaX;
         player.y += platform.deltaY;
       }
+
+      if (platform.justCollapsed) this._onLedgeCollapsed(platform);
+      if (platform.justFlipped) phaseFlipped = true;
     }
+
+    if (phaseFlipped) this._on.phaseFlip?.();
+  }
+
+  /**
+   * A crumbling ledge has given way: throw its rubble and report the sound.
+   *
+   * @param {import('../entities/CrumblePlatform.js').CrumblePlatform} ledge
+   * @private
+   */
+  _onLedgeCollapsed(ledge) {
+    this.particles.emit({
+      x: ledge.centerX,
+      y: ledge.centerY,
+      count: 12,
+      color: PALETTE.stoneLit,
+      speed: 46,
+      gravity: 320,
+      life: 0.6,
+    });
+    this._on.crumble?.();
   }
 
   /**
@@ -234,6 +262,9 @@ export class World {
     for (const platform of this.platforms) {
       if (platform.carry(player, previousBottom)) {
         player.landOnPlatform(platform);
+        // Reported here rather than from `update`, because the footfall that
+        // starts a ledge cracking happens during landing, after it has run.
+        if (platform.justTriggered) this._on.ledgeCracked?.();
         return;
       }
     }

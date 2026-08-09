@@ -68,9 +68,45 @@ export function drawTile(ctx, tile, col, row) {
     case TILE.VAULT:
       drawVault(ctx, x, y);
       break;
+    case TILE.SPRING:
+      drawSpring(ctx, x, y, hash);
+      break;
     default:
       break;
   }
+}
+
+/**
+ * A glowspring: a coil of lantern-lit coral wound on a stone base.
+ *
+ * Drawn tall and bright, and deliberately unlike every other tile - a surface
+ * that behaves differently has to *look* different from across the room, or the
+ * player learns it by dying on it.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x
+ * @param {number} y
+ * @param {number} hash
+ */
+function drawSpring(ctx, x, y, hash) {
+  // Stone footing, so the spring reads as anchored rather than floating.
+  drawStone(ctx, x, y, hash);
+
+  ctx.fillStyle = PALETTE.stone;
+  ctx.fillRect(x, y, TILE_SIZE, 11);
+
+  // Three coils, each inset a little further, which reads as a wound spring
+  // compressed under the cap.
+  ctx.fillStyle = PALETTE.lantern;
+  for (let i = 0; i < 3; i++) {
+    const coilY = y + 4 + i * 3;
+    ctx.fillRect(x + 2 + i, coilY, TILE_SIZE - 4 - i * 2, 2);
+  }
+
+  // The cap, and the core light that names the thing.
+  ctx.fillStyle = PALETTE.lanternCore;
+  ctx.fillRect(x + 1, y + 1, TILE_SIZE - 2, 3);
+  ctx.fillRect(x + 6, y + 5, 4, 1);
 }
 
 /**

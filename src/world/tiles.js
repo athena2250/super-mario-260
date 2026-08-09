@@ -42,6 +42,12 @@ export const TILE = Object.freeze({
   BRIDGE: 7,
   /** Sealed vault door. Solid until the puzzle is solved. */
   VAULT: 8,
+  /**
+   * Glowspring: solid like stone, but throws anything that lands on it far
+   * higher than it could jump. Solid rather than one-way on purpose - a spring
+   * you can fall through is a spring you cannot aim at.
+   */
+  SPRING: 9,
 });
 
 /**
@@ -59,6 +65,7 @@ export const CHAR_TO_TILE = Object.freeze({
   '%': TILE.FALSE_WALL,
   ':': TILE.BRIDGE_GHOST,
   'V': TILE.VAULT,
+  'S': TILE.SPRING,
 });
 
 /** Character marking Pip's start position. Becomes an empty tile. */
@@ -80,6 +87,9 @@ export const CHAR_TO_OBJECT = Object.freeze({
   m: 'platform',
   M: 'platform',
   v: 'platform',
+  x: 'crumble',
+  '[': 'phase',
+  ']': 'phase',
   1: 'switch',
   2: 'switch',
   3: 'switch',
@@ -113,6 +123,14 @@ export const PLATFORM_VARIANT = Object.freeze({
 export const SWITCH_INDEX = Object.freeze({ 1: 0, 2: 1, 3: 2 });
 
 /**
+ * Which half of the beat a phase platform is solid on. `[` leads and `]`
+ * answers, so a level reads as alternating brackets along the crossing and the
+ * ASCII shows the rhythm the player will have to follow.
+ * @type {Record<string, number>}
+ */
+export const PHASE_INDEX = Object.freeze({ '[': 0, ']': 1 });
+
+/**
  * Blocks movement from every direction.
  * @param {number} tile
  * @returns {boolean}
@@ -122,8 +140,21 @@ export function isSolid(tile) {
     tile === TILE.STONE ||
     tile === TILE.MOSS ||
     tile === TILE.BRIDGE ||
-    tile === TILE.VAULT
+    tile === TILE.VAULT ||
+    tile === TILE.SPRING
   );
+}
+
+/**
+ * Launches anything that lands on it. Springs are also {@link isSolid}, so
+ * every existing collision path treats them as ground without knowing this
+ * exists; only the landing case asks.
+ *
+ * @param {number} tile
+ * @returns {boolean}
+ */
+export function isSpring(tile) {
+  return tile === TILE.SPRING;
 }
 
 /**

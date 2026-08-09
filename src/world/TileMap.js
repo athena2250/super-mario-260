@@ -15,6 +15,7 @@ import {
   CHAR_TO_OBJECT,
   PLATFORM_VARIANT,
   SWITCH_INDEX,
+  PHASE_INDEX,
   SPAWN_CHAR,
   isSolid,
   isPlatform,
@@ -281,6 +282,7 @@ export class TileMap {
           const placement = { type: objectType, col, row };
           if (objectType === 'switch') placement.index = SWITCH_INDEX[char];
           if (objectType === 'platform') placement.options = PLATFORM_VARIANT[char];
+          if (objectType === 'phase') placement.index = PHASE_INDEX[char];
           this.objects.push(placement);
           this.tiles[row * this.cols + col] = TILE.EMPTY;
           continue;

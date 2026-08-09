@@ -300,6 +300,21 @@ export class Game {
    */
   _reportPipMoves() {
     if (this.player.justJumped) this.audio.jump();
+
+    if (this.player.justSprang) {
+      this.audio.spring();
+      this.camera.shake(2);
+      this.world.particles.emit({
+        x: this.player.centerX,
+        y: this.player.bottom,
+        count: 12,
+        color: PALETTE.lantern,
+        speed: 80,
+        gravity: 220,
+        life: 0.45,
+      });
+    }
+
     if (!this.player.justLanded) return;
 
     // Only a landing with real force behind it is worth marking; the animation
@@ -614,6 +629,12 @@ export class Game {
         this.audio.refused();
         this.hud.showMessage(`BEACONS ${lit}/${total}`, PALETTE.thistle, 2);
       },
+      ledgeCracked: () => this.audio.ledgeCracked(),
+      crumble: () => {
+        this.audio.crumble();
+        this.camera.shake(1.5);
+      },
+      phaseFlip: () => this.audio.phaseFlip(),
       solved: () => this.hud.showMessage('THE VAULT STIRS', PALETTE.runeAzure, 2.2),
       plank: () => this.audio.plank(),
       vault: () => {

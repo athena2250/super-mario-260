@@ -17,7 +17,7 @@ import { PlayerAnimation } from './PlayerAnimation.js';
 import { drawPip } from './pipSprite.js';
 import { applyGravity } from '../physics/Physics.js';
 import { moveAndCollide, clampToBounds } from '../physics/TileCollision.js';
-import { PLAYER, ENEMY, RULES, DEBUG } from '../core/Config.js';
+import { PLAYER, PHYSICS, ENEMY, RULES, DEBUG } from '../core/Config.js';
 
 /** Minimum speed at which a reversal is dramatic enough to draw as a skid. */
 const SKID_THRESHOLD = 26;
@@ -44,6 +44,9 @@ export class Player extends Entity {
 
     /** True on the single step Pip touches down. */
     this.justLanded = false;
+
+    /** True on the single step a glowspring throws Pip - hook for sound. */
+    this.justSprang = false;
 
     /** True while braking hard against the direction of travel. @type {boolean} */
     this.skidding = false;
@@ -130,6 +133,11 @@ export class Player extends Entity {
     this.justLanded = !wasGrounded && this.grounded;
     if (this.justLanded) this.animation.land(fallSpeed);
 
+    // Resolved after the landing, so the squash pose still plays: the spring
+    // reads as Pip compressing it and being thrown back off.
+    this.justSprang = this.contact.spring;
+    if (this.justSprang) this._launchFromSpring();
+
     this.animation.update(dt, this);
   }
 
@@ -171,6 +179,24 @@ export class Player extends Entity {
   bounce() {
     this.vy = -ENEMY.stompBounce;
     this.grounded = false;
+    this.jump.reset();
+    this.animation.land(0);
+  }
+
+  /**
+   * Be thrown by a glowspring.
+   *
+   * The jump controller is reset for the same reason {@link bounce} resets it:
+   * without it, a player still holding jump from the approach would have the
+   * launch cut by {@link JumpController} the instant they released, and a
+   * spring whose height depends on the button is not a spring.
+   *
+   * @private
+   */
+  _launchFromSpring() {
+    this.vy = -PHYSICS.springSpeed;
+    this.grounded = false;
+    this.contact.grounded = false;
     this.jump.reset();
     this.animation.land(0);
   }
@@ -229,6 +255,8 @@ export class Player extends Entity {
     this.contact.ceiling = false;
     this.contact.wall = false;
     this.contact.hazard = false;
+    this.contact.spring = false;
+    this.justSprang = false;
 
     // Without this the renderer would draw Pip streaking across the level from
     // wherever he died back to the spawn point.

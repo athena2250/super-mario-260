@@ -167,6 +167,17 @@ export const PHYSICS = Object.freeze({
 
   /** How long the landing squash pose is held. */
   landingTime: 0.09,
+
+  /**
+   * Launch speed given by a glowspring, level 1's signature obstacle.
+   *
+   * Derived the same way the jump was: 470 px/s against the base gravity is a
+   * ~116 px rise, a shade over seven tiles. That is comfortably more than
+   * double the 49.5 px Pip manages alone, which is the point - a spring has to
+   * read as *obviously* beyond his own legs at a glance, or players will try to
+   * jump the obstacle instead of using it.
+   */
+  springSpeed: 470,
 });
 
 /**
@@ -243,6 +254,44 @@ export const PLATFORM = Object.freeze({
   speed: 34,
   /** Seconds paused at each end of the run, giving the player a boarding window. */
   waitTime: 0.9,
+});
+
+/**
+ * Crumbling ledge behaviour - level 2's signature obstacle.
+ *
+ * The warning has to be long enough to be a warning and short enough to be a
+ * threat. 0.5 s is about three walking steps: time to read the shake and commit
+ * to the next jump, but not time to stand and think.
+ */
+export const CRUMBLE = Object.freeze({
+  width: 32,
+  height: 6,
+  /** Seconds of shaking between the first footfall and the collapse. */
+  warnTime: 0.5,
+  /** Seconds the ledge stays gone before rebuilding itself. */
+  goneTime: 2.2,
+  /** Pixels of horizontal tremor at full shake. */
+  shake: 1.5,
+});
+
+/**
+ * Phase platform behaviour - level 3's signature obstacle.
+ *
+ * Two interleaved sets share one clock: while one is solid the other is a
+ * ghost, and they trade places every `period`. 1.6 s is deliberately slower
+ * than any jump it gates, so a player who misreads the beat has time to stop
+ * and watch a full cycle rather than being swept into it.
+ */
+export const PHASE = Object.freeze({
+  width: 32,
+  height: 6,
+  /** Seconds each set spends solid before handing over. */
+  period: 1.6,
+  /**
+   * Seconds of flicker before a solid platform turns to a ghost. The platform
+   * is still solid throughout - this is warning, not grace.
+   */
+  warnTime: 0.45,
 });
 
 /**

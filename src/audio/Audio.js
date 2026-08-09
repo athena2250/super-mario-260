@@ -113,6 +113,40 @@ export class Audio {
   }
 
   /**
+   * A glowspring firing: the jump blip, but launched an octave lower and swept
+   * much further up. It has to be recognisably the same *kind* of event as a
+   * jump while being unmistakably bigger.
+   */
+  spring() {
+    this._tone({ type: 'square', from: 200, to: 1180, duration: 0.26, gain: 0.5 });
+    this._tone({ type: 'triangle', from: 400, to: 1600, duration: 0.3, gain: 0.28 });
+  }
+
+  /**
+   * A ledge starting to crack. Dry, granular and short - a warning that has to
+   * cut through without being alarming enough to freeze the player.
+   */
+  ledgeCracked() {
+    this._noise({ duration: 0.07, gain: 0.16 });
+    this._tone({ type: 'square', from: 300, to: 240, duration: 0.08, gain: 0.16 });
+  }
+
+  /** A ledge giving way: the crack's answer, falling and heavier. */
+  crumble() {
+    this._tone({ type: 'sine', from: 220, to: 50, duration: 0.34, gain: 0.34 });
+    this._noise({ duration: 0.18, gain: 0.22 });
+  }
+
+  /**
+   * Phase platforms trading places. Very quiet and perfectly regular - this
+   * plays every couple of seconds for a whole section, so it has to work as a
+   * metronome the player stops consciously hearing and starts moving to.
+   */
+  phaseFlip() {
+    this._tone({ type: 'triangle', from: 880, to: 660, duration: 0.06, gain: 0.1 });
+  }
+
+  /**
    * The stomp: a descending thud with a bright click on top, which is what
    * makes a defeat feel like an impact rather than a beep.
    */

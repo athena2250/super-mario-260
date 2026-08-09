@@ -17,6 +17,8 @@ import { Shard } from '../entities/Shard.js';
 import { RuneSwitch } from '../entities/RuneSwitch.js';
 import { RuneTablet } from '../entities/RuneTablet.js';
 import { MovingPlatform } from '../entities/MovingPlatform.js';
+import { CrumblePlatform } from '../entities/CrumblePlatform.js';
+import { PhasePlatform } from '../entities/PhasePlatform.js';
 import { Checkpoint } from '../entities/Checkpoint.js';
 import { Chest } from '../entities/Chest.js';
 
@@ -93,6 +95,15 @@ export function buildLevel(definition, map) {
         break;
       case 'platform':
         built.platforms.push(new MovingPlatform(col, row, placement.options));
+        break;
+      // Crumbling and phase decks land bodies through the same `carry()`
+      // contract as a moving platform, so they belong in the same list and the
+      // world needs no new collision path for either.
+      case 'crumble':
+        built.platforms.push(new CrumblePlatform(col, row));
+        break;
+      case 'phase':
+        built.platforms.push(new PhasePlatform(col, row, placement.index ?? 0));
         break;
       case 'checkpoint':
         // Numbered after the sweep, once every one of them is known.
